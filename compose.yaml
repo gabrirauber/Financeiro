@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: financeiro
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD para o banco local}
+      POSTGRES_DB: financeiro
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - financeiro_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U financeiro -d financeiro"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  financeiro_dev:
