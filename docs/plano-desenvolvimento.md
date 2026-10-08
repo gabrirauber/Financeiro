@@ -241,3 +241,7 @@ Esses itens são detalhes de execução ainda não aprovados; não devem receber
 - Git: E00 enviada a `https://github.com/gabrirauber/Financeiro.git`, branches `main` e `etapa/00-especificacoes`. E01 local em `etapa/01-prototipo`, sem push.
 
 O cliente autorizou o push da E00 e início da E01. Decisões de negócio sem resposta continuam pendentes, sem impedir a prévia visual. Ver [roteiro de revisão da E01](revisao-e01.md). A E02 não foi iniciada.
+
+## Atualização em 08/10/2026
+
+E02 autorizada e implementação local preparada para review. Testes da API, migrações, TypeScript, bundle Android e conexão da prévia verificados. Publicação Railway e aceite no Android físico pendentes. Ver [revisão E02](revisao-e02.md). E01/E02 sem push; E03 não iniciada. Esta atualização substitui o status anterior do plano.

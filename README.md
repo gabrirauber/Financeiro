@@ -18,3 +18,7 @@ Aplicativo Android para controle financeiro pessoal e compartilhado. E01: protó
 Uma etapa autorizada por vez, com commits locais pequenos. **O cliente faz code review antes de qualquer push.** Aprovar uma etapa ou criar um commit não autoriza envio ao remoto, publicação nem início da próxima etapa.
 
 Instruções de execução e verificações estão no README do aplicativo. Os commits da E01 permanecem locais até o novo review e autorização de push.
+
+## E02 — base técnica
+
+API e conexão local preparadas para review. Consulte [revisão E02](docs/revisao-e02.md), [API](apps/api/README.md) e [Railway](docs/railway-e02.md). Sem push ou publicação; Android físico pendente.
