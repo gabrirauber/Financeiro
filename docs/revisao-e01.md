@@ -4,6 +4,8 @@ Data: 07/10/2026. Status: implementado para revisão visual; aceite no aparelho 
 
 ## Escopo entregue
 
+Revisão solicitada pelo cliente: cadastro simulado de categorias e subcategorias disponível em “Gerenciar categorias e subcategorias” no resumo e diretamente no formulário. A base inicial já contém subcategorias; no lançamento, elas aparecem após selecionar a categoria. Novos cadastros são compartilhados entre telas durante a sessão, com rejeição de nomes vazios ou duplicados na mesma categoria. Recarregar restaura a base inicial. Persistência permanece na E05.
+
 - Painel com mês selecionável, total simulado, gráfico em barras por categoria e detalhamento por subcategoria.
 - Lista de movimentações filtrada pelo mês e, ao detalhar, pela categoria.
 - Botão flutuante à direita para nova despesa.

@@ -3,13 +3,24 @@ import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View } fro
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ExpenseForm } from './src/ExpenseForm';
-import { accounts, cards, categories, Expense, initialExpenses, money, monthKey } from './src/prototype';
+import { accounts, cards, categories as initialCategories, Expense, initialExpenses, money, monthKey } from './src/prototype';
+import { CategoryCreator } from './src/CategoryCreator';
 import { Button, Card, palette } from './src/ui';
 
 type Tab = 'Resumo' | 'Contas' | 'Cartões';
 export default function App() { return <SafeAreaProvider><Prototype /></SafeAreaProvider>; }
 
 function Prototype() {
+  const [categories, setCategories] = useState(() => initialCategories.map(item => ({ ...item, subcategories: [...item.subcategories] })));
+  const [manageCategories, setManageCategories] = useState(false);
+  function addCategory(name: string) {
+    const id = `category-${Date.now()}-${Math.random()}`;
+    setCategories(items => [...items, { id, name, color: '#647CAB', subcategories: [] }]);
+    return id;
+  }
+  function addSubcategory(id: string, name: string) {
+    setCategories(items => items.map(item => item.id === id ? { ...item, subcategories: [...item.subcategories, name] } : item));
+  }
   const [tab, setTab] = useState<Tab>('Resumo');
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
@@ -46,6 +57,7 @@ function Prototype() {
           {!!notice && <Pressable accessibilityRole="button" accessibilityLabel="Dispensar confirmação" onPress={() => setNotice('')} style={s.notice}><Text accessibilityLiveRegion="polite" style={s.small}>{notice}</Text></Pressable>}
           <View style={s.hero}><Text style={s.heroLabel}>GASTOS DO MÊS</Text><Text style={s.heroValue}>{money(total)}</Text><View style={s.heroDivider} /><Text style={s.heroCaption}>Um olhar simples para onde seu dinheiro vai.</Text><Text style={s.heroFoot}>Prévia visual • sem cálculo de faturas ou projeções</Text></View>
           <View style={s.section}><Text style={s.sectionTitle}>{category ? category.name : 'Por categoria'}</Text><Text style={s.small}>{category ? 'Subcategorias' : 'Toque para explorar'}</Text></View>
+          <Button label="Gerenciar categorias e subcategorias" secondary onPress={() => setManageCategories(true)} />
           <Card>
             {category && <Button label="← Todas as categorias" secondary onPress={() => setDetail(null)} />}
             {total === 0 ? <View style={s.empty}><Text style={s.sectionTitle}>Um mês em branco</Text><Text style={s.small}>Use o + para simular sua primeira despesa.</Text></View> : category ? category.subcategories.map(sub => {
@@ -76,7 +88,14 @@ function Prototype() {
       <Pressable accessibilityRole="button" accessibilityLabel="Adicionar despesa" onPress={() => setForm(true)} style={({ pressed }) => [s.fab, pressed && { opacity: 0.8 }]}><Text style={s.fabText}>+</Text></Pressable>
       <View style={s.nav}>{(['Resumo', 'Contas', 'Cartões'] as Tab[]).map((item, index) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => { setTab(item); setDetail(null); }} style={s.navItem}><View style={[s.navIcon, tab === item && s.navActive]}><Text style={[s.navSymbol, tab === item && { color: palette.green }]}>{['▥', '▤', '▱'][index]}</Text></View><Text style={[s.navLabel, tab === item && { color: palette.green, fontWeight: '700' }]}>{item}</Text></Pressable>)}</View>
     </View>
-    {form && <Modal visible animationType="slide" onRequestClose={() => setForm(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ExpenseForm onSave={save} onCancel={() => setForm(false)} /></View></SafeAreaView></Modal>}
+    {form && <Modal visible animationType="slide" onRequestClose={() => setForm(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ExpenseForm categories={categories} onCategory={addCategory} onSubcategory={addSubcategory} onSave={save} onCancel={() => setForm(false)} /></View></SafeAreaView></Modal>}
+    {manageCategories && <Modal visible animationType="slide" onRequestClose={() => setManageCategories(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <Text style={s.pageTitle}>Categorias e subcategorias</Text>
+      <Text style={s.description}>Comece com esta base e adicione suas próprias opções. Na prévia, os cadastros duram apenas nesta sessão.</Text>
+      <Button label="Voltar ao resumo" secondary onPress={() => setManageCategories(false)} />
+      <CategoryCreator kind="categoria" existing={categories.map(item => item.name)} onCreate={addCategory} />
+      {categories.map(item => <Card key={item.id}><Text style={s.sectionTitle}>{item.name}</Text><Text style={s.description}>{item.subcategories.length ? item.subcategories.join(' · ') : 'Nenhuma subcategoria cadastrada.'}</Text><CategoryCreator kind="subcategoria" existing={item.subcategories} onCreate={name => addSubcategory(item.id, name)} /></Card>)}
+    </ScrollView></View></SafeAreaView></Modal>}
   </SafeAreaView>;
 }
 

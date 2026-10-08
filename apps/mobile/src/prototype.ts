@@ -1,9 +1,10 @@
-export const categories = [
+export type Category = { id: string; name: string; color: string; subcategories: string[] };
+export const categories: Category[] = [
   { id: 'casa', name: 'Casa', color: '#315F51', subcategories: ['Aluguel', 'Internet', 'Energia'] },
   { id: 'alimentacao', name: 'Alimentação', color: '#BE6D45', subcategories: ['Mercado', 'Restaurantes', 'Café'] },
   { id: 'transporte', name: 'Transporte', color: '#647CAB', subcategories: ['Combustível', 'Aplicativos', 'Transporte público'] },
   { id: 'lazer', name: 'Lazer', color: '#A77EAC', subcategories: ['Passeios', 'Streaming', 'Compras'] },
-] as const;
+];
 
 export type Expense = {
   id: string; cents: number; category: string; subcategory: string;

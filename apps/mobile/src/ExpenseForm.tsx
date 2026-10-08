@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { accounts, cards, categories, Expense, localDate, parseCents, validDate } from './prototype';
+import { accounts, cards, Category, Expense, localDate, parseCents, validDate } from './prototype';
+import { CategoryCreator } from './CategoryCreator';
 import { Button, Chip, palette } from './ui';
 
-export function ExpenseForm({ onCancel, onSave }: { onCancel: () => void; onSave: (expense: Expense) => void }) {
+export function ExpenseForm({ onCancel, onSave, categories, onCategory, onSubcategory }: { onCancel: () => void; onSave: (expense: Expense) => void; categories: Category[]; onCategory: (name: string) => string; onSubcategory: (id: string, name: string) => void }) {
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [subcategory, setSubcategory] = useState('');
@@ -31,8 +32,10 @@ export function ExpenseForm({ onCancel, onSave }: { onCancel: () => void; onSave
       <View style={s.amountRow}><Text style={s.currency}>R$</Text><TextInput accessibilityLabel="Valor da despesa" placeholder="0,00" placeholderTextColor="#829187" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} style={s.amount} maxLength={14} /></View>
       <Text style={s.label}>Categoria *</Text>
       <View style={s.wrap}>{categories.map(item => <Chip key={item.id} label={item.name} selected={category === item.id} onPress={() => { setCategory(item.id); setSubcategory(''); }} />)}</View>
+      <CategoryCreator kind="categoria" existing={categories.map(item => item.name)} onCreate={name => { setCategory(onCategory(name)); setSubcategory(''); }} />
       <Text style={s.label}>Subcategoria *</Text>
-      <View style={s.wrap}>{selected ? selected.subcategories.map(item => <Chip key={item} label={item} selected={subcategory === item} onPress={() => setSubcategory(item)} />) : <Text style={s.hint}>Escolha a categoria para ver as opções.</Text>}</View>
+      <View style={s.wrap}>{selected ? selected.subcategories.length ? selected.subcategories.map(item => <Chip key={item} label={item} selected={subcategory === item} onPress={() => setSubcategory(item)} />) : <Text style={s.hint}>Esta categoria ainda não tem subcategorias. Cadastre a primeira abaixo.</Text> : <Text style={s.hint}>Selecione uma categoria acima: suas subcategorias aparecerão aqui.</Text>}</View>
+      {selected && <CategoryCreator key={selected.id} kind="subcategoria" existing={selected.subcategories} onCreate={name => { onSubcategory(selected.id, name); setSubcategory(name); }} />}
       <Text style={s.label}>Data da compra *</Text>
       <TextInput accessibilityLabel="Data da compra" style={s.input} value={date} onChangeText={setDate} placeholder="DD/MM/AAAA" keyboardType="numbers-and-punctuation" maxLength={10} />
       <Text style={s.label}>Forma de pagamento *</Text>
