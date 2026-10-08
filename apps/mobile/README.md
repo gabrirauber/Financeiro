@@ -41,3 +41,7 @@ Exportar o bundle não instala nem testa o app em um Android. O lockfile deve ac
 - `src/ui.tsx`: componentes visuais reutilizados.
 
 Base extraída do template oficial `expo-template-blank-typescript@57.0.29`, com dependências conferidas pelo Expo. [Referência do template](https://docs.expo.dev/more/create-expo/).
+
+## Conexão E02
+
+Copie .env.example para .env e configure EXPO_PUBLIC_API_URL. Reinicie o Expo após alterações. O diagnóstico consulta /health/ready; os lançamentos continuam em memória. Consulte [revisão E02](../../docs/revisao-e02.md) para Android físico e estados de falha.
