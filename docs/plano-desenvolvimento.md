@@ -1,6 +1,6 @@
 # Plano de desenvolvimento e commits
 
-Data: 07/10/2026. Status: E00 autorizada e preparada para revisão; implementação do aplicativo não iniciada.
+Data: 07/10/2026. Status: push da E00 autorizado e realizado; E01 autorizada e implementada para revisão visual. Aceite no Android pendente; E02 não iniciada.
 
 ## Objetivo e forma de acompanhamento
 
@@ -236,8 +236,8 @@ Esses itens são detalhes de execução ainda não aprovados; não devem receber
 
 - Modelagem inicial: documentada.
 - Tecnologias: aprovadas pelo cliente.
-- Plano: E00 autorizada; demais etapas aguardam autorização própria.
-- Implementação: não iniciada.
-- Git: inicializado localmente em 07/10/2026. Documentação original preservada no commit inicial; E00 na branch `etapa/00-especificacoes`. Sem remoto configurado e sem push.
+- Plano: E01 autorizada; E02 e posteriores aguardam autorização própria.
+- Implementação: protótipo E01 com dados fictícios; revisão Android pendente.
+- Git: E00 enviada a `https://github.com/gabrirauber/Financeiro.git`, branches `main` e `etapa/00-especificacoes`. E01 local em `etapa/01-prototipo`, sem push.
 
-A E00 está preparada para revisão documental e respostas às decisões pendentes. Ver [roteiro de revisão](revisao-e00.md). A E01 não foi iniciada.
+O cliente autorizou o push da E00 e início da E01. Decisões de negócio sem resposta continuam pendentes, sem impedir a prévia visual. Ver [roteiro de revisão da E01](revisao-e01.md). A E02 não foi iniciada.

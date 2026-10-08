@@ -1,6 +1,6 @@
 # Financeiro
 
-Aplicativo Android para controle financeiro pessoal e compartilhado. Projeto na etapa E00: especificação, sem implementação do aplicativo.
+Aplicativo Android para controle financeiro pessoal e compartilhado. E01: protótipo visual com dados fictícios, preparado para revisão. Backend e persistência ainda não implementados.
 
 ## Documentação
 
@@ -10,9 +10,11 @@ Aplicativo Android para controle financeiro pessoal e compartilhado. Projeto na 
 - [Decisão de arquitetura](docs/adr/0001-arquitetura-inicial.md)
 - [Decisões pendentes](docs/decisoes-pendentes.md)
 - [Revisão da E00](docs/revisao-e00.md)
+- [Executar o protótipo](apps/mobile/README.md)
+- [Revisão da E01](docs/revisao-e01.md)
 
 ## Fluxo de trabalho
 
 Uma etapa autorizada por vez, com commits locais pequenos. **O cliente faz code review antes de qualquer push.** Aprovar uma etapa ou criar um commit não autoriza envio ao remoto, publicação nem início da próxima etapa.
 
-Ainda não existem comandos de instalação, build ou teste do aplicativo: serão documentados quando a implementação começar.
+Instruções de execução e verificações estão no README do aplicativo. Os commits da E01 permanecem locais até o novo review e autorização de push.
