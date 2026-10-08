@@ -1,6 +1,6 @@
 # Plano de desenvolvimento e commits
 
-Data: 07/10/2026. Status: proposta para revisão do cliente. Nenhuma etapa de implementação foi iniciada.
+Data: 07/10/2026. Status: E00 autorizada e preparada para revisão; implementação do aplicativo não iniciada.
 
 ## Objetivo e forma de acompanhamento
 
@@ -15,7 +15,8 @@ Cada etapa seguirá este ciclo:
 3. Executar verificações proporcionais à mudança e conferir as regras financeiras relevantes.
 4. Criar commits pequenos e coerentes, incluindo testes e migrações da funcionalidade correspondente.
 5. Entregar um roteiro de teste no Android, telas ou demonstração, resultados das verificações e relação dos commits reais.
-6. Aguardar o cliente testar e solicitar ajustes ou autorizar expressamente a próxima etapa.
+6. Aguardar o code review do cliente antes de qualquer push. Envio ao remoto exige autorização explícita após a revisão; aprovação de uma etapa não autoriza automaticamente push nem publicação.
+7. Aguardar o cliente testar e solicitar ajustes ou autorizar expressamente a próxima etapa.
 
 A demonstração não deve depender de ler código. Na fase de protótipo, identificar dados fictícios; nas entregas integradas, demonstrar persistência ao fechar e reabrir o aplicativo. Funcionalidades ainda não implementadas devem estar claramente identificadas.
 
@@ -204,7 +205,7 @@ Uma única API organizada por módulos. Estrutura proposta: `apps/api`, `apps/mo
 - As mensagens acima são uma previsão. Podem ser divididas conforme necessário, sem ampliar a etapa autorizada. Evitar um único commit para todo o aplicativo.
 - Manter cada commit consistente e verificável; não incluir segredos, arquivos temporários ou alterações alheias à entrega.
 - Quando Git estiver configurado, trabalhar em uma branch por etapa, como `etapa/05-despesas`. Revisar o diff antes do commit e apresentar hashes reais na entrega.
-- Commit local, envio ao remoto e publicação são ações distintas. Este plano não afirma que alguma delas já ocorreu; definir remoto e rotina de integração na E00. Usar PR se houver repositório remoto e esse fluxo for adotado.
+- Commit local, envio ao remoto e publicação são ações distintas. **O cliente deve fazer code review local antes de qualquer push.** Não enviar sequer a branch para abrir PR antes dessa revisão e autorização. Remoto ainda não informado; não criar nem associar um automaticamente. Depois de autorizado o push, usar PR se esse fluxo for adotado.
 - Ao corrigir uma entrega já revisada, preferir um commit novo que deixe a alteração visível.
 
 Modelo do relatório ao fim de cada etapa:
@@ -229,14 +230,14 @@ Antes de implementar as partes afetadas, documentar respostas e exemplos para:
 - Convites: validade, uso único, transferência da administração e saída do último administrador.
 - Recuperação de senha e eventual serviço de e-mail para a versão de uso real.
 
-Esses itens são detalhes de execução ainda não aprovados; não devem receber regras silenciosamente no código.
+Esses itens são detalhes de execução ainda não aprovados; não devem receber regras silenciosamente no código. As propostas e exemplos estão em [decisões pendentes](decisoes-pendentes.md), e sua cobertura em [critérios de aceite](criterios-aceite.md).
 
 ## Situação atual
 
 - Modelagem inicial: documentada.
 - Tecnologias: aprovadas pelo cliente.
-- Plano: elaborado, aguardando revisão.
+- Plano: E00 autorizada; demais etapas aguardam autorização própria.
 - Implementação: não iniciada.
-- Git: em 07/10/2026, a pasta consultada não possui repositório Git inicializado. Nenhum commit foi criado nesta preparação. Inicialização e primeiro commit fazem parte da E00, quando ela for autorizada.
+- Git: inicializado localmente em 07/10/2026. Documentação original preservada no commit inicial; E00 na branch `etapa/00-especificacoes`. Sem remoto configurado e sem push.
 
-O próximo passo proposto é executar somente a E00. A aprovação deste plano não inicia automaticamente as demais etapas.
+A E00 está preparada para revisão documental e respostas às decisões pendentes. Ver [roteiro de revisão](revisao-e00.md). A E01 não foi iniciada.

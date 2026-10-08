@@ -1,0 +1,32 @@
+# Credenciais e configuração local
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.jks
+*.keystore
+.aws/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# JavaScript e Expo
+node_modules/
+.expo/
+dist/
+coverage/
+
+# Artefatos e arquivos temporários
+*.apk
+*.aab
+*.log
+.DS_Store
+Thumbs.db

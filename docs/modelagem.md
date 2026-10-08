@@ -2,6 +2,8 @@
 
 Versão inicial — 30/09/2026. Documento de especificação; não representa uma implementação.
 
+Atualização de contexto em 07/10/2026: tecnologias aprovadas em [ADR-0001](adr/0001-arquitetura-inicial.md), critérios em [critérios de aceite](criterios-aceite.md). Refinamentos ainda não aprovados estão em [decisões pendentes](decisoes-pendentes.md); em particular, a fórmula do resultado após refinanciamento aguarda essa decisão. O restante deste documento preserva a modelagem inicial.
+
 ## Escopo
 
 Aplicativo Android, conectado à internet, com autenticação por e-mail e senha e dados no servidor. Cada pessoa possui seu login e participa de um espaço financeiro compartilhável por código de convite. Conta financeira significa conta bancária ou dinheiro em espécie; não significa login.
