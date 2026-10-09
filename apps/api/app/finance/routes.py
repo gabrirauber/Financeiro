@@ -141,4 +141,63 @@ def statement(workspace_id: UUID, account_id: UUID, db: Db, user: CurrentUser):
     ]
 
 
+@router.post("/incomes", status_code=201)
+def create_income(workspace_id: UUID, data: IncomeInput, db: Db, user: CurrentUser):
+    workspace, _ = require_member(db, workspace_id, user.id, lock=True)
+    require_current_month(workspace, data.occurred_on)
+    account_or_404(db, workspace_id, data.account_id)
+    row = Movement(
+        workspace_id=workspace_id,
+        account_id=data.account_id,
+        kind="income",
+        amount_cents=data.amount_cents,
+        occurred_on=data.occurred_on,
+        note=data.note.strip(),
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(row)
+    db.commit()
+    return {
+        "id": row.id,
+        "account_id": row.account_id,
+        "amount_cents": row.amount_cents,
+        "occurred_on": row.occurred_on,
+        "note": row.note,
+    }
+
+
+@router.patch("/incomes/{income_id}")
+def edit_income(workspace_id: UUID, income_id: UUID, data: IncomeInput, db: Db, user: CurrentUser):
+    workspace, _ = require_member(db, workspace_id, user.id, lock=True)
+    row = db.get(Movement, income_id)
+    if row is None or row.workspace_id != workspace_id or row.kind != "income":
+        raise HTTPException(404, "Receita não encontrada.")
+    require_current_month(workspace, row.occurred_on)
+    require_current_month(workspace, data.occurred_on)
+    account_or_404(db, workspace_id, data.account_id)
+    row.account_id = data.account_id
+    row.amount_cents = data.amount_cents
+    row.occurred_on = data.occurred_on
+    row.note = data.note.strip()
+    db.commit()
+    return {
+        "id": row.id,
+        "account_id": row.account_id,
+        "amount_cents": row.amount_cents,
+        "occurred_on": row.occurred_on,
+        "note": row.note,
+    }
+
+
+@router.delete("/incomes/{income_id}", status_code=204)
+def delete_income(workspace_id: UUID, income_id: UUID, db: Db, user: CurrentUser):
+    workspace, _ = require_member(db, workspace_id, user.id, lock=True)
+    row = db.get(Movement, income_id)
+    if row is None or row.workspace_id != workspace_id or row.kind != "income":
+        raise HTTPException(404, "Receita não encontrada.")
+    require_current_month(workspace, row.occurred_on)
+    db.delete(row)
+    db.commit()
+
+
 
