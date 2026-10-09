@@ -8,7 +8,7 @@ from sqlalchemy import inspect
 from sqlalchemy.engine import make_url
 
 from app.config import Settings
-from app.database import build_engine
+from app.database import Base, build_engine
 from app.main import create_app
 
 
@@ -23,7 +23,9 @@ def test_postgres_migration_roundtrip(monkeypatch):
     engine = build_engine(Settings())
     try:
         # Nunca destruir um banco contendo tabelas desconhecidas.
-        assert set(inspect(engine).get_table_names()) <= {"app_metadata", "alembic_version"}
+        assert set(inspect(engine).get_table_names()) <= set(Base.metadata.tables) | {
+            "alembic_version"
+        }
         command.upgrade(config, "head")
         command.upgrade(config, "head")
         command.check(config)

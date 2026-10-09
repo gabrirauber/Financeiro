@@ -3,12 +3,15 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Settings
 from app.database import build_engine, database_ready
+from app.identity import auth, invites, recovery, workspaces
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +19,7 @@ logger = logging.getLogger(__name__)
 class HealthResponse(BaseModel):
     status: Literal["ok", "unavailable"]
     database: Literal["ready", "unavailable"]
-    stage: Literal["E02"] = "E02"
+    stage: Literal["E03"] = "E03"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -30,7 +33,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Financeiro API",
-        version="0.2.0",
+        version="0.3.0",
         lifespan=lifespan,
         docs_url="/docs" if settings.app_env != "production" else None,
         redoc_url=None,
@@ -40,14 +43,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=False,
-        allow_methods=["GET"],
-        allow_headers=["Accept"],
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["Accept", "Content-Type", "Authorization"],
     )
     app.state.engine = engine
+    app.state.settings = settings
+    app.include_router(auth.router)
+    app.include_router(workspaces.router)
+    app.include_router(invites.router)
+    app.include_router(recovery.router)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, exc):
+        # Não devolver input (que pode conter senha) na resposta de validação.
+        errors = [
+            {"field": ".".join(str(x) for x in error["loc"]), "message": error["msg"]}
+            for error in exc.errors()
+        ]
+        return JSONResponse(status_code=422, content={"detail": errors})
+
+    @app.exception_handler(SQLAlchemyError)
+    async def database_error(request, exc):
+        logger.warning("Operação indisponível por falha no banco")
+        return JSONResponse(
+            status_code=503, content={"detail": "Serviço indisponível. Tente novamente."}
+        )
 
     @app.get("/health/live")
     def live():
-        return {"status": "ok", "stage": "E02"}
+        return {"status": "ok", "stage": "E03"}
 
     @app.get("/health/ready", response_model=HealthResponse)
     def ready(response: Response):

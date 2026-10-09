@@ -48,3 +48,15 @@ Parar a instância criada nesta sessão (PowerShell na raiz):
 ```
 
 Não remover o volume/pasta para reiniciar a API. Publicação e variáveis do Railway estão descritas em `docs/railway-e02.md`, na raiz do repositório.
+
+## E03 — identidade
+
+A API agora inclui /auth/register, /auth/login, /auth/me, /auth/logout, /workspaces e rotas de convites/participantes. Execute alembic upgrade head antes de iniciar. O diagnóstico exige o esquema E03. Para revisar, consulte docs/revisao-e03.md na raiz.
+
+Os testes de identidade removem registros de tabelas de identidade no banco TEST_DATABASE_URL: use exclusivamente banco descartável terminado em _test. Nunca use uma base compartilhada ou com dados reais.
+
+### Recuperação por e-mail
+
+Configurar SMTP_HOST, SMTP_PORT (padrão 465), SMTP_FROM, SMTP_USER, SMTP_PASSWORD e PASSWORD_RESET_URL no ambiente do servidor. O transporte usa SMTP_SSL. Sem provedor configurado, o endpoint informa indisponibilidade; não imprime links/tokens nos logs.
+
+Desenvolvimento web: PASSWORD_RESET_URL=http://localhost:8081/. Android instalado: PASSWORD_RESET_URL=financeiro://reset. Também é possível URL HTTPS pública que hospede a interface de recuperação. O esquema nativo exige build instalado; Expo Go e Android físico ainda precisam de validação. Nenhuma mensagem real foi enviada na implementação.

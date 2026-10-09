@@ -2,6 +2,7 @@ from alembic import context
 
 from app.config import Settings
 from app.database import Base, build_engine
+from app.identity import models  # noqa: F401
 
 target_metadata = Base.metadata
 
