@@ -1,6 +1,6 @@
 # Financeiro
 
-Aplicativo Android para controle financeiro pessoal e compartilhado. E01: protótipo visual com dados fictícios, preparado para revisão. Backend e persistência ainda não implementados.
+Aplicativo Android para controle financeiro pessoal e compartilhado. Na E05, acesso, espaços, contas, receitas, transferências, categorias e despesas pagas já usam PostgreSQL. A tela de cartões ainda é uma prévia para a E06.
 
 ## Documentação
 
@@ -11,15 +11,16 @@ Aplicativo Android para controle financeiro pessoal e compartilhado. E01: protó
 - [Decisões pendentes](docs/decisoes-pendentes.md)
 - [Revisão da E00](docs/revisao-e00.md)
 - [Executar o protótipo](apps/mobile/README.md)
+- [Revisão da E05](docs/revisao-e05.md)
 - [Revisão da E01](docs/revisao-e01.md)
 
 ## Fluxo de trabalho
 
 Uma etapa autorizada por vez, com commits locais pequenos. **O cliente faz code review antes de qualquer push.** Aprovar uma etapa ou criar um commit não autoriza envio ao remoto, publicação nem início da próxima etapa.
 
-Instruções de execução e verificações estão no README do aplicativo. Os commits da E01 permanecem locais até o novo review e autorização de push.
+Instruções de execução e verificações estão nos READMEs do aplicativo e da API. A E05 permanece local até o review e autorização de push.
 
-## E02 — base técnica
+## Histórico: E02 — base técnica
 
 API e conexão local preparadas para review. Consulte [revisão E02](docs/revisao-e02.md), [API](apps/api/README.md) e [Railway](docs/railway-e02.md). Sem push ou publicação; Android físico pendente.
 

@@ -1,6 +1,6 @@
-# Financeiro API — E02
+# Financeiro API — E05
 
-Python 3.13, FastAPI, SQLAlchemy, PostgreSQL e Alembic. Apenas diagnóstico técnico nesta etapa; sem usuários ou dados financeiros.
+Python 3.13, FastAPI, SQLAlchemy, PostgreSQL e Alembic. A API mantém usuários, espaços compartilhados, contas, receitas, transferências, categorias, subcategorias e despesas pagas.
 
 ## Desenvolvimento local
 
@@ -49,7 +49,7 @@ Parar a instância criada nesta sessão (PowerShell na raiz):
 
 Não remover o volume/pasta para reiniciar a API. Publicação e variáveis do Railway estão descritas em `docs/railway-e02.md`, na raiz do repositório.
 
-## E03 — identidade
+## Histórico: E03 — identidade
 
 A API agora inclui /auth/register, /auth/login, /auth/me, /auth/logout, /workspaces e rotas de convites/participantes. Execute alembic upgrade head antes de iniciar. O diagnóstico exige o esquema E03. Para revisar, consulte docs/revisao-e03.md na raiz.
 

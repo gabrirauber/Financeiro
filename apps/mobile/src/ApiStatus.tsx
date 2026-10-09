@@ -25,7 +25,7 @@ export function ApiStatus() {
           headers: { Accept: 'application/json' },
         });
         const body = await response.json();
-        const healthy = response.ok && body.status === 'ok' && body.database === 'ready' && body.stage === 'E04';
+        const healthy = response.ok && body.status === 'ok' && body.database === 'ready' && body.stage === 'E05';
         if (active) setState(healthy ? 'ready' : 'unavailable');
       } catch {
         if (active) setState('unavailable');
@@ -37,9 +37,9 @@ export function ApiStatus() {
 
   const messages: Record<State, { title: string; text: string }> = {
     checking: { title: 'Verificando conexão…', text: 'Consultando o servidor e o banco de dados.' },
-    ready: { title: 'Servidor conectado', text: 'Contas, receitas e transferências salvas no servidor. Gastos e cartões ainda são exemplos.' },
+    ready: { title: 'Servidor conectado', text: 'Contas, receitas e despesas pagas salvas no servidor. Cartões ainda são exemplos.' },
     unavailable: { title: 'Não foi possível conectar', text: 'Verifique a internet ou tente novamente. Os saldos reais não podem ser consultados agora. Tente novamente.' },
-    unconfigured: { title: 'Conexão ainda não configurada', text: 'A prévia funciona com dados simulados. O endereço do servidor precisa ser configurado para verificar a conexão.' },
+    unconfigured: { title: 'Conexão ainda não configurada', text: 'Configure o endereço do servidor para consultar seus dados.' },
   };
 
   return <Card><View accessibilityLiveRegion="polite" style={{ gap: 8 }}>

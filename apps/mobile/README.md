@@ -1,6 +1,6 @@
-# Financeiro — protótipo E01
+# Financeiro — aplicativo E05
 
-Interface React Native/Expo com TypeScript. Todos os dados são fictícios e ficam em memória: reiniciar ou recarregar restaura os exemplos. Não há autenticação, API ou persistência nesta etapa.
+Interface React Native/Expo com TypeScript. Acesso, contas, categorias e despesas pagas usam a API e persistem no PostgreSQL. Configure EXPO_PUBLIC_API_URL conforme .env.example. Cartões continuam ilustrativos até a E06.
 
 ## Executar
 
@@ -35,14 +35,15 @@ Exportar o bundle não instala nem testa o app em um Android. O lockfile deve ac
 
 ## Organização
 
-- `App.tsx`: painel, abas, seleção de mês e estado da simulação.
+- `App.tsx`: painel real, abas e seleção de mês.
 - `src/ExpenseForm.tsx`: formulário e validações de entrada.
-- `src/prototype.ts`: exemplos, categorias e formatação.
+- `src/finance.ts`: tipos dos dados financeiros.
+- `src/prototype.ts`: formatação e exemplos de cartões.
 - `src/ui.tsx`: componentes visuais reutilizados.
 
 Base extraída do template oficial `expo-template-blank-typescript@57.0.29`, com dependências conferidas pelo Expo. [Referência do template](https://docs.expo.dev/more/create-expo/).
 
-## Conexão E02
+## Histórico: conexão E02
 
 Copie .env.example para .env e configure EXPO_PUBLIC_API_URL. Reinicie o Expo após alterações. O diagnóstico consulta /health/ready; os lançamentos continuam em memória. Consulte [revisão E02](../../docs/revisao-e02.md) para Android físico e estados de falha.
 
