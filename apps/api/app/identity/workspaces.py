@@ -27,10 +27,13 @@ def require_member(db, workspace_id, user_id, *, admin=False, lock=False):
 
 @router.post("", status_code=201)
 def create(data: NameInput, db: Db, user: CurrentUser):
+    from app.finance.categories import seed_categories
+
     workspace = Workspace(name=data.name)
     db.add(workspace)
     db.flush()
     db.add(Membership(workspace_id=workspace.id, user_id=user.id, role="admin"))
+    seed_categories(db, workspace.id)
     db.commit()
     return {"id": workspace.id, "name": workspace.name, "role": "admin"}
 

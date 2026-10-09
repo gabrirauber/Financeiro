@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Settings
 from app.database import build_engine, database_ready
+from app.finance import categories
 from app.finance import routes as finance
 from app.identity import auth, invites, recovery, workspaces
 from app.validation import validation_message
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 class HealthResponse(BaseModel):
     status: Literal["ok", "unavailable"]
     database: Literal["ready", "unavailable"]
-    stage: Literal["E04"] = "E04"
+    stage: Literal["E05"] = "E05"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -35,7 +36,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Financeiro API",
-        version="0.4.0",
+        version="0.5.0",
         lifespan=lifespan,
         docs_url="/docs" if settings.app_env != "production" else None,
         redoc_url=None,
@@ -55,6 +56,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(invites.router)
     app.include_router(recovery.router)
     app.include_router(finance.router)
+    app.include_router(categories.router)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -74,7 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health/live")
     def live():
-        return {"status": "ok", "stage": "E04"}
+        return {"status": "ok", "stage": "E05"}
 
     @app.get("/health/ready", response_model=HealthResponse)
     def ready(response: Response):
