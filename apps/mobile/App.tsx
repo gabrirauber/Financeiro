@@ -189,16 +189,43 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
       {!!error && <Text accessibilityRole="alert" style={{ color: '#AA422E' }}>{error}</Text>}
       <Button label="Voltar ao resumo" secondary onPress={() => setManageCategories(false)} />
       <CategoryCreator kind="categoria" existing={categories.map(item => item.name)} onCreate={async name => { await addCategory(name); }} />
-      {categories.filter(item => item.active).map(item => <Card key={item.id}><Text style={s.sectionTitle}>{item.name}</Text>
-        <Text style={s.description}>{item.subcategories.filter(sub => sub.active).map(sub => sub.name).join(' · ') || 'Nenhuma subcategoria ativa.'}</Text>
+      {categories.filter(item => item.active).map(item => <Card key={item.id}>
+        <CategoryActionRow label={item.name} action="Desativar" onAction={() => confirmAction(`Desativar ${item.name}?`, () => deactivate(`/categories/${item.id}`))} />
+        {item.subcategories.filter(sub => sub.active).map(sub =>
+          <CategoryActionRow key={sub.id} label={sub.name} action="Desativar" nested
+            onAction={() => confirmAction(`Desativar ${sub.name}?`, () => deactivate(`/categories/${item.id}/subcategories/${sub.id}`))} />)}
+        {item.subcategories.filter(sub => !sub.active).map(sub =>
+          <CategoryActionRow key={sub.id} label={sub.name} action="Reativar" nested inactive
+            onAction={() => { void restoreSubcategory(item.id, sub).catch(e => setError(e instanceof Error ? e.message : 'Não foi possível reativar.')); }} />)}
         <CategoryCreator kind="subcategoria" existing={item.subcategories.map(sub => sub.name)} onCreate={async name => { await addSubcategory(item.id, name); }} />
-        {item.subcategories.filter(sub => sub.active).map(sub => <Button key={sub.id} label={`Desativar ${sub.name}`} secondary onPress={() => confirmAction(`Desativar ${sub.name}?`, () => deactivate(`/categories/${item.id}/subcategories/${sub.id}`))} />)}
-        {item.subcategories.filter(sub => !sub.active).map(sub => <Button key={sub.id} label={`Reativar ${sub.name}`} secondary onPress={() => { void restoreSubcategory(item.id, sub).catch(e => setError(e instanceof Error ? e.message : 'Não foi possível reativar.')); }} />)}
-        <Button label={`Desativar categoria ${item.name}`} secondary onPress={() => confirmAction(`Desativar ${item.name}?`, () => deactivate(`/categories/${item.id}`))} />
       </Card>)}
-      {categories.filter(item => !item.active).map(item => <Card key={item.id}><Text style={s.sectionTitle}>{item.name} · inativa</Text><Button label={`Reativar categoria ${item.name}`} secondary onPress={() => { void restoreCategory(item).catch(e => setError(e instanceof Error ? e.message : 'Não foi possível reativar.')); }} /></Card>)}
+      {categories.filter(item => !item.active).map(item =>
+        <Card key={item.id}><CategoryActionRow label={item.name} action="Reativar" inactive
+          onAction={() => { void restoreCategory(item).catch(e => setError(e instanceof Error ? e.message : 'Não foi possível reativar.')); }} /></Card>)}
     </ScrollView></View></SafeAreaView></Modal>}
   </SafeAreaView>;
+}
+
+function CategoryActionRow({ label, action, onAction, nested = false, inactive = false }: {
+  label: string; action: 'Desativar' | 'Reativar'; onAction: () => void;
+  nested?: boolean; inactive?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  return <View style={{ gap: 8 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: nested ? 12 : 0, minHeight: 38 }}>
+      <Text style={{ flex: 1, color: inactive ? palette.muted : palette.ink, fontWeight: nested ? '400' : '700' }}>
+        {label}{inactive ? ' · inativa' : ''}
+      </Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Opções de ${label}`}
+        onPress={() => setOpen(value => !value)} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: palette.green, fontSize: 24, lineHeight: 28 }}>⋯</Text>
+      </Pressable>
+    </View>
+    {open && <View style={{ gap: 8, paddingLeft: nested ? 12 : 0 }}>
+      <Button label={action} secondary onPress={() => { setOpen(false); onAction(); }} />
+      <Button label="Cancelar" secondary onPress={() => setOpen(false)} />
+    </View>}
+  </View>;
 }
 
 function Bar({ label, value, total, color, onPress }: { label: string; value: number; total: number; color: string; onPress?: () => void }) {

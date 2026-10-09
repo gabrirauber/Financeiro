@@ -127,7 +127,7 @@ Uma única API organizada por módulos. Estrutura proposta: `apps/api`, `apps/mo
 - `feat(parcelas): distribuir compras e cadastrar parcelas restantes`
 - `feat(faturas): consultar e pagar fatura integral`
 
-**Aceite:** R$ 600 em três vezes gera R$ 200 em cada fatura; testar compras antes, no dia e depois do fechamento, ambas as opções do checkbox, fevereiro e virada do ano. R$ 100 em três vezes soma exatamente R$ 100. Compra não reduz caixa; pagamento reduz caixa sem duplicar despesa. Parcelamento antigo registra somente o restante e não altera o saldo inicial por pagamentos passados.
+**Aceite:** R$ 600 em três vezes gera R$ 200 em cada fatura; testar compras antes, no dia e depois do fechamento, ambas as opções do checkbox, fevereiro e virada do ano. R$ 100 em três vezes soma exatamente R$ 100. Compra não reduz caixa; pagamento reduz caixa sem duplicar despesa. Gastos do mês inclui compras no crédito no mês da fatura, mesmo aberta, e as mantém após fechamento e pagamento. Parcelamento antigo registra somente o restante e não altera o saldo inicial por pagamentos passados.
 
 **Revisão do cliente:** simular um cartão seu, conferir datas e pagar uma fatura de teste.
 
