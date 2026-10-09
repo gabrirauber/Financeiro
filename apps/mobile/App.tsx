@@ -6,10 +6,11 @@ import { ExpenseForm } from './src/ExpenseForm';
 import { accounts, cards, categories as initialCategories, Expense, initialExpenses, money, monthKey } from './src/prototype';
 import { CategoryCreator } from './src/CategoryCreator';
 import { ApiStatus } from './src/ApiStatus';
+import { AccessGate } from './src/AccessGate';
 import { Button, Card, palette } from './src/ui';
 
 type Tab = 'Resumo' | 'Contas' | 'Cartões';
-export default function App() { return <SafeAreaProvider><Prototype /></SafeAreaProvider>; }
+export default function App() { return <SafeAreaProvider><AccessGate>{workspace => <Prototype key={workspace.id} />}</AccessGate></SafeAreaProvider>; }
 
 function Prototype() {
   const [categories, setCategories] = useState(() => initialCategories.map(item => ({ ...item, subcategories: [...item.subcategories] })));
@@ -51,7 +52,7 @@ function Prototype() {
     <StatusBar style="dark" />
     <View style={s.shell}>
       <View style={s.header}><View><Text style={s.brand}>financeiro<Text style={{ color: '#A9B883' }}>.</Text></Text><Text style={s.small}>Seu dinheiro, com clareza.</Text></View><View style={s.avatar}><Text style={s.avatarText}>F</Text></View></View>
-      <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>PRÉVIA E02 · DADOS FICTÍCIOS</Text></View>
+      <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>PRÉVIA E03 · DADOS FICTÍCIOS</Text></View>
       <ScrollView contentContainerStyle={s.content}>
         {tab === 'Resumo' ? <>
           <ApiStatus />

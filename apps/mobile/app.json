@@ -1,1 +1,16 @@
-{"expo":{"name":"Financeiro · Protótipo","slug":"financeiro-prototipo","version":"0.1.0","orientation":"portrait","userInterfaceStyle":"light","android":{"package":"com.gabrirauber.financeiro"}}}
+{
+  "expo": {
+    "name": "Financeiro · Protótipo",
+    "slug": "financeiro-prototipo",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "com.gabrirauber.financeiro"
+    },
+    "scheme": "financeiro",
+    "plugins": [
+      "expo-secure-store"
+    ]
+  }
+}

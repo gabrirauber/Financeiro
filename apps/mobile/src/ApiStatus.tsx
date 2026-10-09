@@ -25,7 +25,7 @@ export function ApiStatus() {
           headers: { Accept: 'application/json' },
         });
         const body = await response.json();
-        const healthy = response.ok && body.status === 'ok' && body.database === 'ready' && body.stage === 'E02';
+        const healthy = response.ok && body.status === 'ok' && body.database === 'ready' && body.stage === 'E03';
         if (active) setState(healthy ? 'ready' : 'unavailable');
       } catch {
         if (active) setState('unavailable');

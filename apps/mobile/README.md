@@ -45,3 +45,9 @@ Base extraída do template oficial `expo-template-blank-typescript@57.0.29`, com
 ## Conexão E02
 
 Copie .env.example para .env e configure EXPO_PUBLIC_API_URL. Reinicie o Expo após alterações. O diagnóstico consulta /health/ready; os lançamentos continuam em memória. Consulte [revisão E02](../../docs/revisao-e02.md) para Android físico e estados de falha.
+
+## E03 — acesso real
+
+Agora a entrada exige cadastro/login na API. Use e-mail fictício válido e senha de no mínimo 10 caracteres para testar localmente. Sessões ficam em SecureStore no Android e sessionStorage na prévia web. Criar espaço e compartilhar por código são operações reais; o painel financeiro continua simulado em memória.
+
+O app.json declara o esquema financeiro e o plugin expo-secure-store. Links nativos de recuperação exigem um build instalado compatível. Consulte ../../docs/revisao-e03.md para o roteiro completo e as limitações do envio SMTP.
