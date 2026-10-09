@@ -245,3 +245,7 @@ O cliente autorizou o push da E00 e início da E01. Decisões de negócio sem re
 ## Atualização em 08/10/2026
 
 E02 autorizada e implementação local preparada para review. Testes da API, migrações, TypeScript, bundle Android e conexão da prévia verificados. Publicação Railway e aceite no Android físico pendentes. Ver [revisão E02](revisao-e02.md). E01/E02 sem push; E03 não iniciada. Esta atualização substitui o status anterior do plano.
+
+## Atualização em 09/10/2026
+
+E01/E02 enviadas ao remoto por autorização do cliente. E03 implementada localmente na branch etapa/03-acesso-compartilhado e preparada para review. DEC-04 e DEC-05 aprovadas; demais decisões de negócio permanecem pendentes. Validações, SMTP e Android físico estão detalhados em revisao-e03.md. Sem push E03 e sem início da E04. Esta atualização substitui os status anteriores.

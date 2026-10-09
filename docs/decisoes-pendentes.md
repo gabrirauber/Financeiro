@@ -30,11 +30,15 @@ Detalhe ainda a decidir antes de E06: corrigir uma fatura já paga será bloquea
 
 ## DEC-04 — Convites e administração
 
+Aprovada pelo cliente em 08/10/2026: adotar as regras abaixo.
+
 Afeta RF-03/04, E03.
 
 Proposta: código de uso único válido por 24 horas; administrador pode invalidar e gerar outro. Último administrador só sai após transferir a administração. Aceitar convite mantém logins individuais e não expõe credenciais.
 
 ## DEC-05 — Recuperação de senha
+
+Aprovada pelo cliente em 08/10/2026: link temporário de uso único por e-mail. Provedor e configuração ficam para antes da publicação.
 
 Afeta RF-28, E03/E11.
 

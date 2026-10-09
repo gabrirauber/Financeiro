@@ -22,3 +22,7 @@ Instruções de execução e verificações estão no README do aplicativo. Os c
 ## E02 — base técnica
 
 API e conexão local preparadas para review. Consulte [revisão E02](docs/revisao-e02.md), [API](apps/api/README.md) e [Railway](docs/railway-e02.md). Sem push ou publicação; Android físico pendente.
+
+## E03 — acesso e compartilhamento
+
+Implementação local pronta para revisão: [roteiro E03](docs/revisao-e03.md) e [decisão de sessões](docs/adr/0002-identidade-sessoes.md). Cadastro, login e espaços são reais; dados financeiros ainda simulados. E03 sem push, aguardando review. Os status anteriores descrevem as entregas históricas.
