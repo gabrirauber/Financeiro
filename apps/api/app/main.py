@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.config import Settings
 from app.database import build_engine, database_ready
 from app.identity import auth, invites, recovery, workspaces
+from app.validation import validation_message
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def validation_error(request, exc):
         # Não devolver input (que pode conter senha) na resposta de validação.
         errors = [
-            {"field": ".".join(str(x) for x in error["loc"]), "message": error["msg"]}
+            {"field": ".".join(str(x) for x in error["loc"]), "message": validation_message(error)}
             for error in exc.errors()
         ]
         return JSONResponse(status_code=422, content={"detail": errors})
