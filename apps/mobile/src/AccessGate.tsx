@@ -8,7 +8,7 @@ import { Recovery } from './Recovery';
 import { Button, Card, palette } from './ui';
 
 const input = { backgroundColor: 'white', borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink };
-export function AccessGate({ children }: { children: (workspace: Workspace) => React.ReactNode }) {
+export function AccessGate({ children }: { children: (workspace: Workspace, token: string) => React.ReactNode }) {
   const [token, setToken] = useState<string>();
   const tokenRef = useRef<string | undefined>(undefined);
   function activate(value: string) { tokenRef.current = value; setToken(value); }
@@ -105,13 +105,13 @@ export function AccessGate({ children }: { children: (workspace: Workspace) => R
       <Text style={{ color: palette.ink, fontWeight: '700' }}>{selected.name}</Text>
       <Button label="Espaços e participantes" secondary onPress={() => setSelected(undefined)} />
     </SafeAreaView>
-    {children(selected)}
+    {children(selected, token)}
   </View>;
 
   return <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 24, gap: 16, width: '100%', maxWidth: 560, alignSelf: 'center' }}>
       <Text style={{ fontSize: 30, fontWeight: '800', color: palette.ink }}>financeiro.</Text>
-      <Text style={{ color: palette.muted }}>E03 · acesso real, painel financeiro ainda simulado.</Text>
+      <Text style={{ color: palette.muted }}>E04 · acesso e contas reais. Gastos e cartões ainda são exemplos.</Text>
       {error ? <Text accessibilityRole="alert" style={{ color: '#923D2B' }}>{error}</Text> : null}
       {busy ? <Text accessibilityLiveRegion="polite">Aguarde…</Text> : null}
       {!user ? <Card>

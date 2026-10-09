@@ -3,16 +3,18 @@ import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View } fro
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ExpenseForm } from './src/ExpenseForm';
-import { accounts, cards, categories as initialCategories, Expense, initialExpenses, money, monthKey } from './src/prototype';
+import { cards, categories as initialCategories, Expense, initialExpenses, money, monthKey } from './src/prototype';
 import { CategoryCreator } from './src/CategoryCreator';
 import { ApiStatus } from './src/ApiStatus';
 import { AccessGate } from './src/AccessGate';
+import { AccountsPanel } from './src/AccountsPanel';
+import { Workspace } from './src/api';
 import { Button, Card, palette } from './src/ui';
 
 type Tab = 'Resumo' | 'Contas' | 'Cartões';
-export default function App() { return <SafeAreaProvider><AccessGate>{workspace => <Prototype key={workspace.id} />}</AccessGate></SafeAreaProvider>; }
+export default function App() { return <SafeAreaProvider><AccessGate>{(workspace, token) => <Prototype key={workspace.id} workspace={workspace} token={token} />}</AccessGate></SafeAreaProvider>; }
 
-function Prototype() {
+function Prototype({ workspace, token }: { workspace: Workspace; token: string }) {
   const [categories, setCategories] = useState(() => initialCategories.map(item => ({ ...item, subcategories: [...item.subcategories] })));
   const [manageCategories, setManageCategories] = useState(false);
   function addCategory(name: string) {
@@ -52,7 +54,7 @@ function Prototype() {
     <StatusBar style="dark" />
     <View style={s.shell}>
       <View style={s.header}><View><Text style={s.brand}>financeiro<Text style={{ color: '#A9B883' }}>.</Text></Text><Text style={s.small}>Seu dinheiro, com clareza.</Text></View><View style={s.avatar}><Text style={s.avatarText}>F</Text></View></View>
-      <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>PRÉVIA E03 · DADOS FICTÍCIOS</Text></View>
+      <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>E04 · CONTAS REAIS, GASTOS DE EXEMPLO</Text></View>
       <ScrollView contentContainerStyle={s.content}>
         {tab === 'Resumo' ? <>
           <ApiStatus />
@@ -78,10 +80,7 @@ function Prototype() {
           </View>) : <Text style={s.small}>Nenhuma despesa nesta seleção.</Text>}</Card>
           <Text style={s.footerNote}>Tudo aqui é uma simulação em memória. Seus dados reais ainda não são solicitados.</Text>
         </> : tab === 'Contas' ? <>
-          <Text style={s.pageTitle}>Suas contas</Text><Text style={s.description}>Uma visão de onde o dinheiro está.</Text>
-          <View style={s.hero}><Text style={s.heroLabel}>SALDO ILUSTRATIVO</Text><Text style={s.heroValue}>{money(345000)}</Text><Text style={s.heroCaption}>2 contas de exemplo</Text></View>
-          {accounts.map((account, index) => <Card key={account}><Text style={s.itemTitle}>{account}</Text><Text style={s.small}>{index ? 'Dinheiro em espécie' : 'Conta bancária'}</Text><Text style={s.pageTitle}>{money(index ? 25000 : 320000)}</Text></Card>)}
-          <Card><Text style={s.sectionTitle}>O próximo passo</Text><Text style={s.description}>Cadastro de contas, receitas e transferências chega na E04. Os saldos acima são fixos e não mudam com a simulação.</Text></Card>
+          <AccountsPanel workspace={workspace} token={token} />
         </> : <>
           <Text style={s.pageTitle}>Seus cartões</Text><Text style={s.description}>Compras organizadas, mês a mês.</Text>
           {cards.map((card, index) => <View key={card} style={[s.bankCard, index === 1 && { backgroundColor: '#45566E' }]}><Text style={s.heroLabel}>CRÉDITO · EXEMPLO</Text><Text style={s.bankName}>{card}</Text><View style={s.bankDates}><View><Text style={s.heroCaption}>Fechamento</Text><Text style={s.bankDate}>Dia {index ? 20 : 10}</Text></View><View><Text style={s.heroCaption}>Vencimento</Text><Text style={s.bankDate}>Dia {index ? 28 : 18}</Text></View></View></View>)}

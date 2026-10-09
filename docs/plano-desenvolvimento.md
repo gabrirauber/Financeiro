@@ -249,3 +249,7 @@ E02 autorizada e implementação local preparada para review. Testes da API, mig
 ## Atualização em 09/10/2026
 
 E01/E02 enviadas ao remoto por autorização do cliente. E03 implementada localmente na branch etapa/03-acesso-compartilhado e preparada para review. DEC-04 e DEC-05 aprovadas; demais decisões de negócio permanecem pendentes. Validações, SMTP e Android físico estão detalhados em revisao-e03.md. Sem push E03 e sem início da E04. Esta atualização substitui os status anteriores.
+
+## Atualização em 09/10/2026 — E04
+
+E03 enviada ao remoto com autorização do cliente. E04 implementada na branch local etapa/04-contas-receitas-transferencias; contas, receitas, transferências, extrato e saldos reais prontos para revisão. A E04 aguarda code review antes do push. Ver [revisão E04](revisao-e04.md). Esta atualização substitui os status anteriores.

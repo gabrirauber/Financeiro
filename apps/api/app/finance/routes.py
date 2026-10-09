@@ -61,6 +61,11 @@ def account_or_404(db, workspace_id, account_id):
     return account
 
 
+def require_after_opening(account, day):
+    if day < account.opened_on:
+        raise HTTPException(422, "A data não pode ser anterior ao cadastro da conta.")
+
+
 def account_balances(db, workspace_id):
     # Saldos derivados do mesmo extrato que o usuário consulta; nunca há dois saldos a sincronizar.
     signed = case(
@@ -105,7 +110,7 @@ def create_account(workspace_id: UUID, data: AccountInput, db: Db, user: Current
         name=data.name,
         kind=data.kind,
         opening_balance_cents=data.opening_balance_cents,
-        opened_on=current.replace(day=1),
+        opened_on=current,
     )
     db.add(account)
     db.commit()
@@ -145,7 +150,8 @@ def statement(workspace_id: UUID, account_id: UUID, db: Db, user: CurrentUser):
 def create_income(workspace_id: UUID, data: IncomeInput, db: Db, user: CurrentUser):
     workspace, _ = require_member(db, workspace_id, user.id, lock=True)
     require_current_month(workspace, data.occurred_on)
-    account_or_404(db, workspace_id, data.account_id)
+    account = account_or_404(db, workspace_id, data.account_id)
+    require_after_opening(account, data.occurred_on)
     row = Movement(
         workspace_id=workspace_id,
         account_id=data.account_id,
@@ -174,7 +180,8 @@ def edit_income(workspace_id: UUID, income_id: UUID, data: IncomeInput, db: Db, 
         raise HTTPException(404, "Receita não encontrada.")
     require_current_month(workspace, row.occurred_on)
     require_current_month(workspace, data.occurred_on)
-    account_or_404(db, workspace_id, data.account_id)
+    account = account_or_404(db, workspace_id, data.account_id)
+    require_after_opening(account, data.occurred_on)
     row.account_id = data.account_id
     row.amount_cents = data.amount_cents
     row.occurred_on = data.occurred_on
@@ -200,4 +207,123 @@ def delete_income(workspace_id: UUID, income_id: UUID, db: Db, user: CurrentUser
     db.commit()
 
 
+@router.post("/transfers", status_code=201)
+def create_transfer(workspace_id: UUID, data: TransferInput, db: Db, user: CurrentUser):
+    workspace, _ = require_member(db, workspace_id, user.id, lock=True)
+    require_current_month(workspace, data.occurred_on)
+    if data.from_account_id == data.to_account_id:
+        raise HTTPException(422, "Escolha duas contas diferentes.")
+    origin = account_or_404(db, workspace_id, data.from_account_id)
+    target = account_or_404(db, workspace_id, data.to_account_id)
+    require_after_opening(origin, data.occurred_on)
+    require_after_opening(target, data.occurred_on)
+    transfer_id = uuid4()
+    created_at = datetime.now(timezone.utc)
+    note = data.note.strip()
+    db.add_all(
+        [
+            Movement(
+                workspace_id=workspace_id,
+                account_id=data.from_account_id,
+                kind="transfer_out",
+                amount_cents=data.amount_cents,
+                occurred_on=data.occurred_on,
+                note=note,
+                transfer_id=transfer_id,
+                created_at=created_at,
+            ),
+            Movement(
+                workspace_id=workspace_id,
+                account_id=data.to_account_id,
+                kind="transfer_in",
+                amount_cents=data.amount_cents,
+                occurred_on=data.occurred_on,
+                note=note,
+                transfer_id=transfer_id,
+                created_at=created_at,
+            ),
+        ]
+    )
+    db.commit()
+    return {
+        "id": transfer_id,
+        "from_account_id": data.from_account_id,
+        "to_account_id": data.to_account_id,
+        "amount_cents": data.amount_cents,
+        "occurred_on": data.occurred_on,
+        "note": note,
+    }
 
+
+@router.delete("/transfers/{transfer_id}", status_code=204)
+def delete_transfer(workspace_id: UUID, transfer_id: UUID, db: Db, user: CurrentUser):
+    workspace, _ = require_member(db, workspace_id, user.id, lock=True)
+    rows = db.scalars(
+        select(Movement).where(
+            Movement.workspace_id == workspace_id, Movement.transfer_id == transfer_id
+        )
+    ).all()
+    if len(rows) != 2:
+        raise HTTPException(404, "Transferência não encontrada.")
+    require_current_month(workspace, rows[0].occurred_on)
+    for row in rows:
+        db.delete(row)
+    db.commit()
+
+
+@router.patch("/transfers/{transfer_id}")
+def edit_transfer(
+    workspace_id: UUID, transfer_id: UUID, data: TransferInput, db: Db, user: CurrentUser
+):
+    workspace, _ = require_member(db, workspace_id, user.id, lock=True)
+    rows = db.scalars(
+        select(Movement).where(
+            Movement.workspace_id == workspace_id, Movement.transfer_id == transfer_id
+        )
+    ).all()
+    if len(rows) != 2:
+        raise HTTPException(404, "Transferência não encontrada.")
+    require_current_month(workspace, rows[0].occurred_on)
+    require_current_month(workspace, data.occurred_on)
+    if data.from_account_id == data.to_account_id:
+        raise HTTPException(422, "Escolha duas contas diferentes.")
+    origin = account_or_404(db, workspace_id, data.from_account_id)
+    target = account_or_404(db, workspace_id, data.to_account_id)
+    require_after_opening(origin, data.occurred_on)
+    require_after_opening(target, data.occurred_on)
+    for row in rows:
+        row.account_id = data.from_account_id if row.kind == "transfer_out" else data.to_account_id
+        row.amount_cents = data.amount_cents
+        row.occurred_on = data.occurred_on
+        row.note = data.note.strip()
+    db.commit()
+    return {
+        "id": transfer_id,
+        "from_account_id": data.from_account_id,
+        "to_account_id": data.to_account_id,
+        "amount_cents": data.amount_cents,
+        "occurred_on": data.occurred_on,
+        "note": data.note.strip(),
+    }
+
+
+@router.get("/transfers/{transfer_id}")
+def get_transfer(workspace_id: UUID, transfer_id: UUID, db: Db, user: CurrentUser):
+    require_member(db, workspace_id, user.id)
+    rows = db.scalars(
+        select(Movement).where(
+            Movement.workspace_id == workspace_id, Movement.transfer_id == transfer_id
+        )
+    ).all()
+    if len(rows) != 2:
+        raise HTTPException(404, "Transferência não encontrada.")
+    outgoing = next(row for row in rows if row.kind == "transfer_out")
+    incoming = next(row for row in rows if row.kind == "transfer_in")
+    return {
+        "id": transfer_id,
+        "from_account_id": outgoing.account_id,
+        "to_account_id": incoming.account_id,
+        "amount_cents": outgoing.amount_cents,
+        "occurred_on": outgoing.occurred_on,
+        "note": outgoing.note,
+    }
