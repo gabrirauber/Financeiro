@@ -146,6 +146,8 @@ def test_legacy_and_remaining_edit_keep_past(client):
     )
     assert purchase.status_code == 201, purchase.text
     assert [x["sequence"] for x in purchase.json()["installments"]] == [4, 5]
+    assert [x["amount_cents"] for x in purchase.json()["installments"]] == [3000, 3000]
+    assert purchase.json()["installments"][0]["invoice_month"] == first.isoformat()
     updated = client.patch(
         f"{root}/card-purchases/{purchase.json()['id']}/remaining",
         headers=headers,
@@ -158,3 +160,53 @@ def test_legacy_and_remaining_edit_keep_past(client):
     )
     assert updated.status_code == 200, updated.text
     assert [x["amount_cents"] for x in updated.json()["installments"]] == [2500, 2501]
+
+
+def test_edit_card_keeps_existing_invoice_dates(client):
+    headers, space = setup(client)
+    root = f"/workspaces/{space}"
+    category = client.get(f"{root}/categories", headers=headers).json()[0]
+    sub = category["subcategories"][0]
+    current = date.fromisoformat(today())
+    card = client.post(
+        f"{root}/cards",
+        headers=headers,
+        json={
+            "name": "Original",
+            "closing_day": 1,
+            "due_day": 15,
+            "closing_day_next_bill": False,
+        },
+    ).json()
+    previous = client.post(
+        f"{root}/card-purchases",
+        headers=headers,
+        json={
+            "card_id": card["id"],
+            "category_id": category["id"],
+            "subcategory_id": sub["id"],
+            "purchased_on": current.isoformat(),
+            "total_cents": 1200,
+            "installment_count": 1,
+            "legacy": True,
+            "first_bill_month": current.replace(day=1).isoformat(),
+        },
+    )
+    assert previous.status_code == 201, previous.text
+    invoice_id = previous.json()["installments"][0]["invoice_id"]
+    before = client.get(f"{root}/invoices/{invoice_id}", headers=headers).json()
+    edited = client.patch(
+        f"{root}/cards/{card['id']}",
+        headers=headers,
+        json={
+            "name": "Atualizado",
+            "closing_day": 10,
+            "due_day": 25,
+            "closing_day_next_bill": True,
+        },
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["due_day"] == 25
+    after = client.get(f"{root}/invoices/{invoice_id}", headers=headers).json()
+    assert (after["closes_on"], after["due_on"]) == (before["closes_on"], before["due_on"])
+    assert after["card_name"] == "Atualizado"

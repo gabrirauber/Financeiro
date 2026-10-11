@@ -166,6 +166,28 @@ def create_card(workspace_id: UUID, data: CardInput, db: Db, user: CurrentUser):
     return serialize_card(card)
 
 
+@router.patch("/cards/{card_id}")
+def edit_card(workspace_id: UUID, card_id: UUID, data: CardInput, db: Db, user: CurrentUser):
+    require_member(db, workspace_id, user.id, lock=True)
+    card = card_or_404(db, workspace_id, card_id)
+    duplicate = db.scalar(
+        select(CreditCard.id).where(
+            CreditCard.workspace_id == workspace_id,
+            CreditCard.name_key == data.name.casefold(),
+            CreditCard.id != card.id,
+        )
+    )
+    if duplicate:
+        raise HTTPException(409, "Já existe um cartão com esse nome.")
+    card.name = data.name
+    card.name_key = data.name.casefold()
+    card.closing_day = data.closing_day
+    card.due_day = data.due_day
+    card.closing_day_next_bill = data.closing_day_next_bill
+    db.commit()
+    return serialize_card(card)
+
+
 def ensure_invoice(db, card, month):
     row = db.scalar(select(Invoice).where(Invoice.card_id == card.id, Invoice.month == month))
     if row:
@@ -209,6 +231,12 @@ def create_purchase(workspace_id: UUID, data: PurchaseInput, db: Db, user: Curre
         raise HTTPException(422, "A primeira fatura não pode ser anterior ao ciclo da compra.")
     if first < current.replace(day=1):
         raise HTTPException(422, "A primeira fatura não pode ser anterior ao mês corrente.")
+    if not data.legacy:
+        existing = db.scalar(
+            select(Invoice).where(Invoice.card_id == card.id, Invoice.month == first)
+        )
+        if existing and data.purchased_on > existing.closes_on:
+            first = shift_month(first, 1)
     purchase = CardPurchase(
         card_id=card.id,
         purchased_on=data.purchased_on,
