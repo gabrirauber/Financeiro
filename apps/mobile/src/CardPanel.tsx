@@ -37,6 +37,10 @@ export function CardPanel({ workspace, token, refresh }: {
   const [editingPurchase, setEditingPurchase] = useState<string>();
   const [remainingAmount, setRemainingAmount] = useState('');
   const [remainingNote, setRemainingNote] = useState('');
+  const [partialOpen, setPartialOpen] = useState(false);
+  const [partialAmount, setPartialAmount] = useState('');
+  const [partialFees, setPartialFees] = useState('0,00');
+  const [partialCount, setPartialCount] = useState('2');
   async function load() {
     const [allCards, allInvoices, allAccounts, allCategories] = await Promise.all([
       request<CreditCard[]>(`${root}/cards`, token),
@@ -117,6 +121,28 @@ export function CardPanel({ workspace, token, refresh }: {
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível pagar a fatura.'); }
     finally { setBusy(false); }
   }
+  async function payPartial(invoice: Invoice) {
+    const paid = parseCents(partialAmount);
+    const fees = parseCents(partialFees) ?? (/^0(?:,0{1,2})?$/.test(partialFees.trim()) ? 0 : null);
+    const count = Number(partialCount);
+    if (!payAccount) return setError('Escolha uma conta bancária.');
+    if (!paid || paid >= invoice.total_cents)
+      return setError('O pagamento deve ser maior que zero e menor que o total da fatura.');
+    if (fees === null) return setError('Informe os juros e encargos em reais; use 0,00 se não houver.');
+    if (!Number.isInteger(count) || count < 1 || count > 120 ||
+      invoice.total_cents - paid < count) return setError('Informe uma quantidade válida de parcelas.');
+    setBusy(true); setError('');
+    try {
+      await request(`${root}/invoices/${invoice.id}/pay-partial`, token, 'POST', {
+        account_id: payAccount, paid_cents: paid, fee_cents: fees,
+        installment_count: count,
+      });
+      setPartialOpen(false);
+      setNotice('Pagamento parcial registrado. O restante foi lançado nas próximas faturas.');
+      await load(); refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível registrar o pagamento parcial.'); }
+    finally { setBusy(false); }
+  }
   const current = invoices.find(x => x.id === selected);
   function startCorrection(purchaseId: string) {
     const editable = invoices.flatMap(invoice => invoice.installments)
@@ -165,13 +191,21 @@ export function CardPanel({ workspace, token, refresh }: {
     {!!notice && <Card><Text style={muted}>{notice}</Text></Card>}
     {!!error && <Card><Text accessibilityRole="alert" style={{ color: '#AA422E' }}>{error}</Text></Card>}
     {current ? <>
-      <Button secondary label="← Todas as faturas" onPress={() => setSelected(undefined)} />
+      <Button secondary label="← Todas as faturas" onPress={() => { setSelected(undefined); setPartialOpen(false); }} />
       <Card>
         <Text style={label}>{current.card_name} · {current.month.slice(0, 7).split('-').reverse().join('/')}</Text>
         <Text style={{ fontSize: 29, fontWeight: '700', color: palette.ink }}>{money(current.total_cents)}</Text>
         <Text style={muted}>Fecha em {dateToDisplay(current.closes_on)} · vence em {dateToDisplay(current.due_on)}</Text>
-        <Text style={muted}>{current.status === 'paid' ? `Paga em ${dateToDisplay(current.paid_on!)}` :
+        <Text style={muted}>{current.status === 'refinanced' ? 'Pagamento parcial registrado · restante parcelado' :
+          current.status === 'paid' ? `Paga em ${dateToDisplay(current.paid_on!)}` :
           current.status === 'open' ? 'Fatura aberta' : 'Fatura fechada · aguardando pagamento'}</Text>
+        {current.financing && <Text style={muted}>Pago agora: {money(current.financing.paid_cents)} ·
+          Principal parcelado: {money(current.financing.principal_cents)} ·
+          Encargos: {money(current.financing.fee_cents)}</Text>}
+        {current.financing_installments.map(item => <View key={item.id} style={{ paddingVertical: 9, borderTopWidth: 1, borderColor: palette.line }}>
+          <Text style={label}>Faturas parceladas · {item.sequence}/{item.total_count}</Text>
+          <Text style={muted}>Principal {money(item.principal_cents)} · encargos {money(item.fee_cents)} · total {money(item.amount_cents)}</Text>
+        </View>)}
         {current.installments.map(item => <View key={item.id} style={{ paddingVertical: 9, borderTopWidth: 1, borderColor: palette.line }}>
           <Text style={label}>{item.note || 'Compra no crédito'} · {item.sequence}/{item.total_count}</Text>
           <Text style={muted}>{dateToDisplay(item.purchased_on)} · {money(item.amount_cents)}</Text>
@@ -197,6 +231,32 @@ export function CardPanel({ workspace, token, refresh }: {
           <Chip key={a.id} label={a.name} selected={payAccount === a.id} onPress={() => setPayAccount(a.id)} />)}</View>
         <Button label={busy ? 'Pagando…' : `Pagar ${money(current.total_cents)}`}
           onPress={() => { if (!busy) void pay(current); }} />
+        <Button label="Pagar parcialmente e parcelar restante" secondary
+          onPress={() => { setPartialOpen(true); setError(''); }} />
+        {partialOpen && <>
+          <Text style={label}>Valor pago agora *</Text>
+          <TextInput accessibilityLabel="Valor do pagamento parcial" style={input} value={partialAmount}
+            onChangeText={setPartialAmount} keyboardType="decimal-pad" placeholder="600,00" />
+          <Text style={label}>Juros e encargos totais *</Text>
+          <TextInput accessibilityLabel="Juros e encargos do financiamento" style={input} value={partialFees}
+            onChangeText={setPartialFees} keyboardType="decimal-pad" placeholder="0,00" />
+          <Text style={label}>Número de parcelas futuras *</Text>
+          <TextInput accessibilityLabel="Número de parcelas do financiamento" style={input} value={partialCount}
+            onChangeText={setPartialCount} keyboardType="number-pad" maxLength={3} />
+          {(() => {
+            const paid = parseCents(partialAmount);
+            const fees = parseCents(partialFees) ?? (/^0(?:,0{1,2})?$/.test(partialFees.trim()) ? 0 : null);
+            const count = Number(partialCount);
+            if (!paid || paid >= current.total_cents || fees === null ||
+              !Number.isInteger(count) || count < 1) return null;
+            return <Text style={muted}>Sai da conta agora: {money(paid)}. Restante:
+              {money(current.total_cents - paid)} + encargos {money(fees)} =
+              {money(current.total_cents - paid + fees)} em {count} {count === 1 ? 'fatura futura' : 'faturas futuras'}.</Text>;
+          })()}
+          <Button label={busy ? 'Confirmando…' : 'Confirmar pagamento e parcelamento'}
+            onPress={() => { if (!busy) void payPartial(current); }} />
+          <Button label="Cancelar" secondary onPress={() => { setPartialOpen(false); setError(''); }} />
+        </>}
       </Card>}
     </> : <>
       {!editingCard && <Button label={showCreate ? 'Cancelar' : 'Cadastrar cartão'}
@@ -234,8 +294,8 @@ export function CardPanel({ workspace, token, refresh }: {
         </Card>}
         {invoices.filter(i => i.card_id === card.id).length ? invoices.filter(i => i.card_id === card.id).map(invoice =>
           <Button key={invoice.id} secondary
-            label={`${invoice.month.slice(0, 7).split('-').reverse().join('/')} · ${money(invoice.total_cents)} · ${invoice.status === 'paid' ? 'Paga' : invoice.status === 'open' ? 'Aberta' : 'Fechada'}`}
-            onPress={() => setSelected(invoice.id)} />) :
+            label={`${invoice.month.slice(0, 7).split('-').reverse().join('/')} · ${money(invoice.total_cents)} · ${invoice.status === 'refinanced' ? 'Parcelada' : invoice.status === 'paid' ? 'Paga' : invoice.status === 'open' ? 'Aberta' : 'Fechada'}`}
+            onPress={() => { setSelected(invoice.id); setPartialOpen(false); setPartialAmount(''); setPartialFees('0,00'); setPartialCount('2'); }} />) :
           <Text style={muted}>Ainda não há compras neste cartão.</Text>}
       </Card>)}
       {!cards.length && <Card><Text style={muted}>Cadastre seu primeiro cartão para lançar compras parceladas.</Text></Card>}

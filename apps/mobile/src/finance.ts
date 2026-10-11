@@ -31,12 +31,25 @@ export type CardInstallment = {
 export type Invoice = {
   id: string; card_id: string; card_name: string; month: string;
   closes_on: string; due_on: string; paid_on: string | null;
-  status: 'open' | 'closed' | 'paid'; total_cents: number;
+  status: 'open' | 'closed' | 'paid' | 'refinanced'; total_cents: number;
+  purchase_total_cents: number; financed_total_cents: number;
   installments: CardInstallment[];
+  financing_installments: FinancingInstallment[];
+  financing: null | {
+    id: string; paid_cents: number; principal_cents: number;
+    fee_cents: number; installment_count: number;
+  };
 };
 export type CardPurchaseInput = {
   card_id: string; category_id: string; subcategory_id: string;
   purchased_on: string; total_cents: number; installment_count: number;
   note: string; legacy: boolean; first_bill_month?: string;
   first_sequence?: number;
+};
+
+export type FinancingInstallment = {
+  id: string; financing_id: string; source_invoice_id: string;
+  invoice_id: string; invoice_month: string; invoice_paid: boolean;
+  card_id: string; card_name: string; sequence: number; total_count: number;
+  principal_cents: number; fee_cents: number; amount_cents: number;
 };

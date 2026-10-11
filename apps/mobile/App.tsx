@@ -10,7 +10,7 @@ import { AccessGate } from './src/AccessGate';
 import { AccountsPanel } from './src/AccountsPanel';
 import { CardPanel } from './src/CardPanel';
 import { request, Workspace } from './src/api';
-import { Account, Category, Expense, ExpenseInput, Subcategory, CreditCard, CardInstallment, CardPurchaseInput, dateToDisplay, monthIso, paymentLabel } from './src/finance';
+import { Account, Category, Expense, ExpenseInput, Subcategory, CreditCard, CardInstallment, CardPurchaseInput, FinancingInstallment, dateToDisplay, monthIso, paymentLabel } from './src/finance';
 import { Button, Card, palette } from './src/ui';
 
 type Tab = 'Resumo' | 'Contas' | 'Cartões';
@@ -26,6 +26,7 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [financed, setFinanced] = useState<FinancingInstallment[]>([]);
   const [tab, setTab] = useState<Tab>('Resumo');
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [detail, setDetail] = useState<string | null>(null);
@@ -38,7 +39,9 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
   const [refresh, setRefresh] = useState(0);
   const period = monthIso(month);
   const category = categories.find(item => item.id === detail);
-  const total = expenses.reduce((sum, item) => sum + item.amount_cents, 0);
+  const consumptionTotal = expenses.reduce((sum, item) => sum + item.amount_cents, 0);
+  const financedTotal = financed.reduce((sum, item) => sum + item.amount_cents, 0);
+  const total = consumptionTotal + financedTotal;
   const monthName = month.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   const monthTitle = monthName.charAt(0).toUpperCase() + monthName.slice(1);
   const currentMonth = monthIso(new Date());
@@ -52,9 +55,10 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
       request<Expense[]>(`${root}/expenses?month=${period}`, token),
       request<CardInstallment[]>(`${root}/card-installments?month=${period}`, token),
       request<CreditCard[]>(`${root}/cards`, token),
-    ]).then(([cats, accs, rows, installments, cardRows]) => {
+      request<FinancingInstallment[]>(`${root}/invoice-financing-installments?month=${period}`, token),
+    ]).then(([cats, accs, rows, installments, cardRows, financedRows]) => {
       if (!active) return;
-      setCategories(cats); setAccounts(accs); setCards(cardRows);
+      setCategories(cats); setAccounts(accs); setCards(cardRows); setFinanced(financedRows);
       setExpenses([...rows, ...installments.map(item => ({
         id: item.id, account_id: '', category_id: item.category_id,
         subcategory_id: item.subcategory_id, amount_cents: item.amount_cents,
@@ -149,7 +153,7 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
     <StatusBar style="dark" />
     <View style={s.shell}>
       <View style={s.header}><View><Text style={s.brand}>financeiro<Text style={{ color: '#A9B883' }}>.</Text></Text><Text style={s.small}>Seu dinheiro, com clareza.</Text></View><View style={s.avatar}><Text style={s.avatarText}>F</Text></View></View>
-      <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>E06 · CARTÕES E FATURAS</Text></View>
+      <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>E07 · PAGAMENTO PARCIAL</Text></View>
       <ScrollView contentContainerStyle={s.content}>
         {tab === 'Resumo' ? <>
           <ApiStatus />
@@ -157,7 +161,7 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
           {!!notice && <Pressable accessibilityRole="button" accessibilityLabel="Dispensar confirmação" onPress={() => setNotice('')} style={s.notice}><Text accessibilityLiveRegion="polite" style={s.small}>{notice}</Text></Pressable>}
           {!!error && <Card><Text accessibilityRole="alert" style={{ color: '#AA422E' }}>{error}</Text><Button label="Tentar novamente" secondary onPress={() => setRefresh(value => value + 1)} /></Card>}
           {loading && <Text style={s.small}>Carregando gastos…</Text>}
-          <View style={s.hero}><Text style={s.heroLabel}>GASTOS DO MÊS</Text><Text style={s.heroValue}>{money(total)}</Text><View style={s.heroDivider} /><Text style={s.heroCaption}>Despesas pagas e parcelas das faturas deste mês.</Text><Text style={s.heroFoot}>O pagamento da fatura altera o saldo, sem duplicar os gastos.</Text></View>
+          <View style={s.hero}><Text style={s.heroLabel}>GASTOS E COMPROMISSOS DO MÊS</Text><Text style={s.heroValue}>{money(total)}</Text><View style={s.heroDivider} /><Text style={s.heroCaption}>Compras e despesas: {money(consumptionTotal)} · Faturas parceladas: {money(financedTotal)}</Text><Text style={s.heroFoot}>Compras originais ficam no mês da fatura. Parcelas financiadas aparecem nos meses futuros; seu principal não é novo consumo.</Text></View>
           <View style={s.section}><Text style={s.sectionTitle}>{category ? category.name : 'Por categoria'}</Text><Text style={s.small}>{category ? 'Subcategorias' : 'Toque para explorar'}</Text></View>
           <Button label="Gerenciar categorias e subcategorias" secondary onPress={() => setManageCategories(true)} />
           <Card>
@@ -167,10 +171,13 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
                 const value = visible.filter(item => item.subcategory_id === sub.id).reduce((sum, item) => sum + item.amount_cents, 0);
                 const categoryTotal = visible.reduce((sum, item) => sum + item.amount_cents, 0);
                 return <Bar key={sub.id} label={sub.name} value={value} total={categoryTotal} color={category.color} />;
-              }) : categories.map(item => {
-                const value = expenses.filter(row => row.category_id === item.id).reduce((sum, row) => sum + row.amount_cents, 0);
-                return <Bar key={item.id} label={item.name} value={value} total={total} color={item.color} onPress={() => setDetail(item.id)} />;
-              })}
+              }) : <>
+                {categories.map(item => {
+                  const value = expenses.filter(row => row.category_id === item.id).reduce((sum, row) => sum + row.amount_cents, 0);
+                  return <Bar key={item.id} label={item.name} value={value} total={total} color={item.color} onPress={() => setDetail(item.id)} />;
+                })}
+                {financedTotal > 0 && <Bar label="Faturas parceladas" value={financedTotal} total={total} color="#6C7296" />}
+              </>}
           </Card>
           <View style={s.section}><Text style={s.sectionTitle}>Despesas do mês</Text><Text style={s.small}>{visible.length} {visible.length === 1 ? 'item' : 'itens'}</Text></View>
           <Card>{visible.length ? visible.map(item => {
@@ -190,6 +197,17 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
               </View><Text style={s.itemValue}>{money(item.amount_cents)}</Text>
             </View>;
           }) : <Text style={s.small}>Nenhuma despesa nesta seleção.</Text>}</Card>
+          {!detail && financed.length > 0 && <>
+            <View style={s.section}><Text style={s.sectionTitle}>Faturas parceladas</Text><Text style={s.small}>{financed.length} {financed.length === 1 ? 'parcela' : 'parcelas'}</Text></View>
+            <Card>{financed.map(item => <View key={item.id} style={s.transaction}>
+              <View style={[s.transactionDot, { backgroundColor: '#6C7296' }]} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={s.itemTitle}>{item.card_name} · {item.sequence}/{item.total_count}</Text>
+                <Text style={s.small}>Principal {money(item.principal_cents)} · encargos {money(item.fee_cents)}</Text>
+                <Text style={s.small}>Compromisso da fatura {item.invoice_month.slice(0, 7).split('-').reverse().join('/')}; não é nova compra.</Text>
+              </View><Text style={s.itemValue}>{money(item.amount_cents)}</Text>
+            </View>)}</Card>
+          </>}
         </> : tab === 'Contas' ? <AccountsPanel workspace={workspace} token={token} /> : <>
           <CardPanel workspace={workspace} token={token} refresh={() => setRefresh(value => value + 1)} />
         </>}
