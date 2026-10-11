@@ -5,7 +5,7 @@ import { localDate, money, parseCents, validDate } from './prototype';
 import { Button, Card, Chip, palette } from './ui';
 
 type Account = { id: string; name: string; kind: 'bank' | 'cash'; opening_balance_cents: number; balance_cents: number; opened_on: string };
-type Movement = { id: string; kind: 'income' | 'transfer_in' | 'transfer_out' | 'expense'; amount_cents: number; occurred_on: string; note: string; transfer_id: string | null };
+type Movement = { id: string; kind: 'income' | 'transfer_in' | 'transfer_out' | 'expense' | 'bill_payment'; amount_cents: number; occurred_on: string; note: string; transfer_id: string | null };
 type Mode = 'account' | 'income' | 'transfer' | null;
 const input = { backgroundColor: 'white', borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink };
 const dateToIso = (value: string) => value.split('/').reverse().join('-');
@@ -134,10 +134,10 @@ export function AccountsPanel({ workspace, token }: { workspace: Workspace; toke
         <Text style={{ color: palette.muted }}>Saldo inicial: {money(current.opening_balance_cents)}</Text>
         {!statement.length && <Text style={{ color: palette.muted }}>Nenhuma movimentação nesta conta.</Text>}
         {statement.map(row => <View key={row.id} style={{ paddingVertical: 8, borderTopWidth: 1, borderColor: palette.line, gap: 4 }}>
-          <Text style={{ color: palette.ink, fontWeight: '600' }}>{row.kind === 'income' ? 'Receita' : row.kind === 'expense' ? 'Despesa paga' : row.kind === 'transfer_in' ? 'Transferência recebida' : 'Transferência enviada'} · {dateToDisplay(row.occurred_on)}</Text>
+          <Text style={{ color: palette.ink, fontWeight: '600' }}>{row.kind === 'income' ? 'Receita' : row.kind === 'expense' ? 'Despesa paga' : row.kind === 'bill_payment' ? 'Fatura paga' : row.kind === 'transfer_in' ? 'Transferência recebida' : 'Transferência enviada'} · {dateToDisplay(row.occurred_on)}</Text>
           {!!row.note && <Text style={{ color: palette.muted }}>{row.note}</Text>}
-          <Text style={{ color: (row.kind === 'transfer_out' || row.kind === 'expense') ? '#AA422E' : palette.green, fontWeight: '700' }}>{(row.kind === 'transfer_out' || row.kind === 'expense') ? '−' : '+'}{money(row.amount_cents)}</Text>
-          {thisMonth(row.occurred_on) && row.kind !== 'expense' && <View style={{ flexDirection: 'row', gap: 18 }}>{<Text onPress={() => row.kind === 'income' ? startEdit(row) : void startEditTransfer(row)} style={{ color: palette.green }}>Editar</Text>}<Text onPress={() => remove(row)} style={{ color: '#AA422E' }}>{row.kind === 'income' ? 'Excluir' : 'Desfazer'}</Text></View>}
+          <Text style={{ color: (row.kind === 'transfer_out' || row.kind === 'expense' || row.kind === 'bill_payment') ? '#AA422E' : palette.green, fontWeight: '700' }}>{(row.kind === 'transfer_out' || row.kind === 'expense' || row.kind === 'bill_payment') ? '−' : '+'}{money(row.amount_cents)}</Text>
+          {thisMonth(row.occurred_on) && row.kind !== 'expense' && row.kind !== 'bill_payment' && <View style={{ flexDirection: 'row', gap: 18 }}>{<Text onPress={() => row.kind === 'income' ? startEdit(row) : void startEditTransfer(row)} style={{ color: palette.green }}>Editar</Text>}<Text onPress={() => remove(row)} style={{ color: '#AA422E' }}>{row.kind === 'income' ? 'Excluir' : 'Desfazer'}</Text></View>}
         </View>)}
       </Card>
     </>}

@@ -3,13 +3,14 @@ import { Alert, AppState, BackHandler, Modal, Platform, Pressable, ScrollView, S
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ExpenseForm } from './src/ExpenseForm';
-import { cards, money } from './src/prototype';
+import { money } from './src/prototype';
 import { CategoryCreator } from './src/CategoryCreator';
 import { ApiStatus } from './src/ApiStatus';
 import { AccessGate } from './src/AccessGate';
 import { AccountsPanel } from './src/AccountsPanel';
+import { CardPanel } from './src/CardPanel';
 import { request, Workspace } from './src/api';
-import { Account, Category, Expense, ExpenseInput, Subcategory, dateToDisplay, monthIso, paymentLabel } from './src/finance';
+import { Account, Category, Expense, ExpenseInput, Subcategory, CreditCard, CardInstallment, CardPurchaseInput, dateToDisplay, monthIso, paymentLabel } from './src/finance';
 import { Button, Card, palette } from './src/ui';
 
 type Tab = 'Resumo' | 'Contas' | 'Cartões';
@@ -23,6 +24,7 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
   const root = `/workspaces/${workspace.id}`;
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [cards, setCards] = useState<CreditCard[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [tab, setTab] = useState<Tab>('Resumo');
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
@@ -48,9 +50,18 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
       request<Category[]>(`${root}/categories`, token),
       request<Account[]>(`${root}/accounts`, token),
       request<Expense[]>(`${root}/expenses?month=${period}`, token),
-    ]).then(([cats, accs, rows]) => {
+      request<CardInstallment[]>(`${root}/card-installments?month=${period}`, token),
+      request<CreditCard[]>(`${root}/cards`, token),
+    ]).then(([cats, accs, rows, installments, cardRows]) => {
       if (!active) return;
-      setCategories(cats); setAccounts(accs); setExpenses(rows); setError('');
+      setCategories(cats); setAccounts(accs); setCards(cardRows);
+      setExpenses([...rows, ...installments.map(item => ({
+        id: item.id, account_id: '', category_id: item.category_id,
+        subcategory_id: item.subcategory_id, amount_cents: item.amount_cents,
+        occurred_on: item.purchased_on, payment_method: 'credit' as const,
+        note: item.note, card_name: item.card_name, sequence: item.sequence,
+        total_count: item.total_count, invoice_paid: item.invoice_paid,
+      }))]); setError('');
     }).catch(e => { if (active) setError(e instanceof Error ? e.message : 'Não foi possível carregar o resumo.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -122,6 +133,12 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
     setRefresh(value => value + 1);
     setNotice(wasEditing ? 'Despesa atualizada e saldo corrigido.' : 'Despesa salva e descontada da conta.');
   }
+  async function saveCredit(input: CardPurchaseInput) {
+    await request(`${root}/card-purchases`, token, 'POST', input);
+    setForm(false); setEditing(undefined); setDetail(null); setTab('Resumo');
+    setRefresh(value => value + 1);
+    setNotice('Compra salva nas faturas do cartão. O saldo muda quando a fatura for paga.');
+  }
   async function removeExpense(expense: Expense) {
     await request(`${root}/expenses/${expense.id}`, token, 'DELETE');
     setRefresh(value => value + 1);
@@ -132,7 +149,7 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
     <StatusBar style="dark" />
     <View style={s.shell}>
       <View style={s.header}><View><Text style={s.brand}>financeiro<Text style={{ color: '#A9B883' }}>.</Text></Text><Text style={s.small}>Seu dinheiro, com clareza.</Text></View><View style={s.avatar}><Text style={s.avatarText}>F</Text></View></View>
-      <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>E05 · DESPESAS E SALDOS REAIS</Text></View>
+      <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>E06 · CARTÕES E FATURAS</Text></View>
       <ScrollView contentContainerStyle={s.content}>
         {tab === 'Resumo' ? <>
           <ApiStatus />
@@ -140,12 +157,12 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
           {!!notice && <Pressable accessibilityRole="button" accessibilityLabel="Dispensar confirmação" onPress={() => setNotice('')} style={s.notice}><Text accessibilityLiveRegion="polite" style={s.small}>{notice}</Text></Pressable>}
           {!!error && <Card><Text accessibilityRole="alert" style={{ color: '#AA422E' }}>{error}</Text><Button label="Tentar novamente" secondary onPress={() => setRefresh(value => value + 1)} /></Card>}
           {loading && <Text style={s.small}>Carregando gastos…</Text>}
-          <View style={s.hero}><Text style={s.heroLabel}>GASTOS DO MÊS</Text><Text style={s.heroValue}>{money(total)}</Text><View style={s.heroDivider} /><Text style={s.heroCaption}>Despesas pagas com dinheiro, Pix ou débito.</Text><Text style={s.heroFoot}>Faturas e projeções entram nas próximas etapas.</Text></View>
+          <View style={s.hero}><Text style={s.heroLabel}>GASTOS DO MÊS</Text><Text style={s.heroValue}>{money(total)}</Text><View style={s.heroDivider} /><Text style={s.heroCaption}>Despesas pagas e parcelas das faturas deste mês.</Text><Text style={s.heroFoot}>O pagamento da fatura altera o saldo, sem duplicar os gastos.</Text></View>
           <View style={s.section}><Text style={s.sectionTitle}>{category ? category.name : 'Por categoria'}</Text><Text style={s.small}>{category ? 'Subcategorias' : 'Toque para explorar'}</Text></View>
           <Button label="Gerenciar categorias e subcategorias" secondary onPress={() => setManageCategories(true)} />
           <Card>
             {category && <Button label="← Todas as categorias" secondary onPress={() => setDetail(null)} />}
-            {!total ? <View style={s.empty}><Text style={s.sectionTitle}>Um mês em branco</Text><Text style={s.small}>Use o + para lançar sua primeira despesa paga.</Text></View> :
+            {!total ? <View style={s.empty}><Text style={s.sectionTitle}>Um mês em branco</Text><Text style={s.small}>Use o + para lançar uma despesa ou compra no crédito.</Text></View> :
               category ? category.subcategories.map(sub => {
                 const value = visible.filter(item => item.subcategory_id === sub.id).reduce((sum, item) => sum + item.amount_cents, 0);
                 const categoryTotal = visible.reduce((sum, item) => sum + item.amount_cents, 0);
@@ -155,7 +172,7 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
                 return <Bar key={item.id} label={item.name} value={value} total={total} color={item.color} onPress={() => setDetail(item.id)} />;
               })}
           </Card>
-          <View style={s.section}><Text style={s.sectionTitle}>Despesas pagas</Text><Text style={s.small}>{visible.length} {visible.length === 1 ? 'item' : 'itens'}</Text></View>
+          <View style={s.section}><Text style={s.sectionTitle}>Despesas do mês</Text><Text style={s.small}>{visible.length} {visible.length === 1 ? 'item' : 'itens'}</Text></View>
           <Card>{visible.length ? visible.map(item => {
             const cat = categories.find(x => x.id === item.category_id);
             const sub = cat?.subcategories.find(x => x.id === item.subcategory_id);
@@ -165,8 +182,8 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={s.itemTitle}>{item.note || sub?.name || 'Despesa'}</Text>
                 <Text style={s.small}>{cat?.name || 'Categoria'} · {sub?.name || 'Subcategoria'} · {dateToDisplay(item.occurred_on)}</Text>
-                <Text style={s.small}>{paymentLabel[item.payment_method]} · {acc?.name || 'Conta'}</Text>
-                {item.occurred_on.slice(0, 7) === currentMonth && <View style={{ flexDirection: 'row', gap: 16 }}>
+                <Text style={s.small}>{paymentLabel[item.payment_method]} · {item.payment_method === 'credit' ? `${item.card_name} · ${item.sequence}/${item.total_count}` : acc?.name || 'Conta'}</Text>
+                {item.payment_method !== 'credit' && item.occurred_on.slice(0, 7) === currentMonth && <View style={{ flexDirection: 'row', gap: 16 }}>
                   <Text accessibilityRole="button" onPress={() => { setEditing(item); setForm(true); }} style={{ color: palette.green }}>Editar</Text>
                   <Text accessibilityRole="button" onPress={() => confirmAction('Excluir despesa?', () => removeExpense(item))} style={{ color: '#AA422E' }}>Excluir</Text>
                 </View>}
@@ -174,15 +191,13 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
             </View>;
           }) : <Text style={s.small}>Nenhuma despesa nesta seleção.</Text>}</Card>
         </> : tab === 'Contas' ? <AccountsPanel workspace={workspace} token={token} /> : <>
-          <Text style={s.pageTitle}>Seus cartões</Text><Text style={s.description}>Compras organizadas, mês a mês.</Text>
-          {cards.map((card, index) => <View key={card} style={[s.bankCard, index === 1 && { backgroundColor: '#45566E' }]}><Text style={s.heroLabel}>CRÉDITO · EXEMPLO</Text><Text style={s.bankName}>{card}</Text><View style={s.bankDates}><View><Text style={s.heroCaption}>Fechamento</Text><Text style={s.bankDate}>Dia {index ? 20 : 10}</Text></View><View><Text style={s.heroCaption}>Vencimento</Text><Text style={s.bankDate}>Dia {index ? 28 : 18}</Text></View></View></View>)}
-          <Card><Text style={s.sectionTitle}>Próxima etapa</Text><Text style={s.description}>Cartões, faturas e parcelas entram na E06. Esta tela ainda apresenta exemplos.</Text></Card>
+          <CardPanel workspace={workspace} token={token} refresh={() => setRefresh(value => value + 1)} />
         </>}
       </ScrollView>
       <Pressable accessibilityRole="button" accessibilityLabel="Adicionar despesa" onPress={() => { void openNewExpense(); }} style={({ pressed }) => [s.fab, pressed && { opacity: 0.8 }]}><Text style={s.fabText}>+</Text></Pressable>
       <View style={s.nav}>{(['Resumo', 'Contas', 'Cartões'] as Tab[]).map((item, index) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => { setTab(item); setDetail(null); if (item === 'Resumo') setRefresh(value => value + 1); }} style={s.navItem}><View style={[s.navIcon, tab === item && s.navActive]}><Text style={[s.navSymbol, tab === item && { color: palette.green }]}>{['▥', '▤', '▱'][index]}</Text></View><Text style={[s.navLabel, tab === item && { color: palette.green, fontWeight: '700' }]}>{item}</Text></Pressable>)}</View>
     </View>
-    {form && <Modal visible animationType="slide" onRequestClose={() => setForm(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ExpenseForm key={editing?.id || 'new'} initial={editing} categories={categories} accounts={accounts} onCategory={addCategory} onSubcategory={addSubcategory} onSave={saveExpense} onCancel={() => { setForm(false); setEditing(undefined); }} /></View></SafeAreaView></Modal>}
+    {form && <Modal visible animationType="slide" onRequestClose={() => setForm(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ExpenseForm key={editing?.id || 'new'} initial={editing} categories={categories} accounts={accounts} cards={cards} onCreditSave={saveCredit} onCategory={addCategory} onSubcategory={addSubcategory} onSave={saveExpense} onCancel={() => { setForm(false); setEditing(undefined); }} /></View></SafeAreaView></Modal>}
     {manageCategories && <Modal visible animationType="slide" onRequestClose={() => setManageCategories(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <Text style={s.pageTitle}>Categorias e subcategorias</Text>
       <Text style={s.description}>As opções pertencem a este espaço e ficam disponíveis para todos os participantes. Desativar preserva os lançamentos antigos.</Text>
