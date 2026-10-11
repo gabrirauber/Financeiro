@@ -13,10 +13,9 @@ export function AccessGate({ children }: { children: (workspace: Workspace, toke
   const tokenRef = useRef<string | undefined>(undefined);
   function activate(value: string) { tokenRef.current = value; setToken(value); }
   const [user, setUser] = useState<User>();
-  const [spaces, setSpaces] = useState<Workspace[]>([]);
   const [selected, setSelected] = useState<Workspace>();
   const [register, setRegister] = useState(false);
-  const [managing, setManaging] = useState<Workspace>();
+  const [managing, setManaging] = useState(false);
   const [recover, setRecover] = useState(false);
   const [resetToken, setResetToken] = useState<string>();
   const [code, setCode] = useState('');
@@ -31,13 +30,14 @@ export function AccessGate({ children }: { children: (workspace: Workspace, toke
       request<User>('/auth/me', value), request<Workspace[]>('/workspaces', value),
     ]);
     if (tokenRef.current !== value) return;
-    setUser(profile); setSpaces(workspaces); setManaging(old => workspaces.find(item => item.id === old?.id));
-    setSelected(old => workspaces.find(item => item.id === old?.id));
+    setUser(profile);
+    setSelected(workspaces[0]);
+    if (workspaces.length === 0) setManaging(false);
   }
   async function resetSession() {
     tokenRef.current = undefined;
     setRegister(false); setPassword('');
-    await clearSession(); setToken(undefined); setUser(undefined); setSelected(undefined); setSpaces([]); setManaging(undefined);
+    await clearSession(); setToken(undefined); setUser(undefined); setSelected(undefined); setManaging(false);
   }
   async function run(action: () => Promise<void>) {
     setBusy(true); setError('');
@@ -88,8 +88,12 @@ export function AccessGate({ children }: { children: (workspace: Workspace, toke
 
   async function authenticate() {
     await run(async () => {
-      const result = await request<{ token: string }>(register ? '/auth/register' : '/auth/login', undefined, 'POST', { email: email.trim(), password });
+      const result = await request<{ token: string }>(register ? '/auth/register' : '/auth/login', undefined, 'POST', {
+        email: email.trim(), password,
+        ...(register ? (code.trim() ? {invite_code: code.trim()} : {workspace_name: 'Minhas finanças'}) : {}),
+      });
       await saveSession(result.token); activate(result.token); setPassword('');
+      setCode('');
       await load(result.token);
     });
   }
@@ -103,9 +107,12 @@ export function AccessGate({ children }: { children: (workspace: Workspace, toke
   if (selected && user && token) return <View style={{ flex: 1, backgroundColor: palette.bg }}>
     <SafeAreaView edges={['top']} style={{ paddingHorizontal: 20, paddingTop: 8, gap: 8 }}>
       <Text style={{ color: palette.ink, fontWeight: '700' }}>{selected.name}</Text>
-      <Button label="Espaços e participantes" secondary onPress={() => setSelected(undefined)} />
+      <Button label={managing ? 'Fechar participantes' : 'Participantes'} secondary onPress={() => setManaging(!managing)} />
     </SafeAreaView>
-    {children(selected, token)}
+    {managing ? <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:20, maxWidth:560, width:'100%', alignSelf:'center', gap:16}}>
+      <MembersPanel workspace={selected} token={token} onClose={() => setManaging(false)} onChanged={() => load(token)} />
+      <Button label="Sair da conta" secondary onPress={() => void logout()} />
+    </ScrollView> : children(selected, token)}
   </View>;
 
   return <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
@@ -118,6 +125,10 @@ export function AccessGate({ children }: { children: (workspace: Workspace, toke
         <Text style={{ fontSize: 22, color: palette.ink }}>{register ? 'Crie seu acesso' : 'Boas-vindas'}</Text>
         <TextInput accessibilityLabel="E-mail" placeholder="E-mail" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} style={input} editable={!busy} />
         <TextInput accessibilityLabel="Senha" placeholder="Senha (mínimo 10 caracteres)" secureTextEntry value={password} onChangeText={setPassword} style={input} editable={!busy} maxLength={128} />
+        {register && <>
+          <Text style={{color: palette.muted}}>Recebeu um convite? Informe o código para entrar no espaço compartilhado. Sem código, criaremos seu espaço automaticamente.</Text>
+          <TextInput accessibilityLabel="Código de convite (opcional)" placeholder="Código de convite (opcional)" autoCapitalize="characters" value={code} onChangeText={setCode} style={input} editable={!busy} maxLength={64} />
+        </>}
         {!busy && <>
           <Button label={register ? 'Cadastrar' : 'Entrar'} onPress={() => void authenticate()} />
           <Button label={register ? 'Já tenho cadastro' : 'Criar cadastro'} secondary onPress={() => { setRegister(!register); setError(''); }} />
@@ -125,18 +136,11 @@ export function AccessGate({ children }: { children: (workspace: Workspace, toke
         </>}
       </Card> : <>
         <Text style={{ color: palette.muted }}>{user.email}</Text>
-        <Text style={{ fontSize: 22, color: palette.ink }}>Seus espaços financeiros</Text>{managing && token && <MembersPanel workspace={managing} token={token} onClose={() => setManaging(undefined)} onChanged={() => load(token)} />}
-        {spaces.length === 0 && <Text>Crie um espaço para começar.</Text>}
-        {spaces.map(space => <Card key={space.id}><Text style={{ fontSize: 18, fontWeight: '700', color: palette.ink }}>{space.name}</Text><Text>{space.role === 'admin' ? 'Administrador' : 'Participante'}</Text><Button label={`Abrir ${space.name}`} onPress={() => void run(async () => {
-          const fresh = await request<Workspace[]>('/workspaces', token);
-          setSpaces(fresh);
-          const allowed = fresh.find(item => item.id === space.id);
-          if (!allowed) throw new Error('Você não participa mais deste espaço.');
-          setSelected(allowed);
-        })} /><Button label={`Participantes de ${space.name}`} secondary onPress={() => setManaging(space)} /></Card>)}
+        <Text style={{ fontSize: 22, color: palette.ink }}>Comece seu espaço financeiro</Text>
+        <Text style={{color:palette.muted}}>Entre com um convite ou crie seu próprio espaço.</Text>
         <Card><Text style={{ fontWeight: '700' }}>Criar espaço</Text><TextInput accessibilityLabel="Nome do espaço" placeholder="Ex.: Finanças da casa" style={input} value={name} onChangeText={setName} maxLength={80} />
         {!busy && <Button label="Criar espaço financeiro" onPress={() => void run(async () => {
-          await request('/workspaces', token, 'POST', { name }); setName(''); await load(token!);
+          await request('/workspaces', token, 'POST', { name: name.trim() || 'Minhas finanças' }); setName(''); await load(token!);
         })} />}</Card>
         <Card><Text style={{fontWeight:'700'}}>Entrar por código</Text><TextInput accessibilityLabel="Código de convite" placeholder="Código recebido" autoCapitalize="characters" value={code} onChangeText={setCode} style={input} maxLength={64} />{!busy && <Button label="Entrar no espaço compartilhado" onPress={() => void run(async () => {
           await request('/invites/accept', token, 'POST', {code}); setCode(''); await load(token!);

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.identity.dependencies import CurrentUser, Db
-from app.identity.models import Invite, Membership, Workspace
+from app.identity.models import Invite, Membership, User, Workspace
 from app.identity.security import digest, now, throttle
 from app.identity.workspaces import require_member
 
@@ -61,7 +61,16 @@ def revoke(workspace_id: UUID, invite_id: UUID, db: Db, user: CurrentUser):
 @router.post("/invites/accept")
 def accept(data: CodeInput, db: Db, user: CurrentUser):
     throttle(db, "invite-accept:", str(user.id), 15)
-    token_hash = digest(data.code.strip().upper())
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    workspace = claim_invite(db, user, data.code)
+    db.commit()
+    return {"id": workspace.id, "name": workspace.name, "role": "member"}
+
+
+def claim_invite(db, user, code):
+    if db.scalar(select(Membership).where(Membership.user_id == user.id)):
+        raise HTTPException(409, "Você já participa de um espaço financeiro.")
+    token_hash = digest(code.strip().upper())
     candidate = db.scalar(select(Invite).where(Invite.token_hash == token_hash))
     if candidate is None:
         raise HTTPException(400, "Código inválido, expirado ou já utilizado.")
@@ -83,12 +92,9 @@ def accept(data: CodeInput, db: Db, user: CurrentUser):
         or invite.expires_at <= now()
     ):
         raise HTTPException(400, "Código inválido, expirado ou já utilizado.")
-    if db.get(Membership, (workspace.id, user.id)):
-        raise HTTPException(409, "Você já participa deste espaço.")
     invite.used_at = now()
     db.add(Membership(workspace_id=workspace.id, user_id=user.id, role="member"))
-    db.commit()
-    return {"id": workspace.id, "name": workspace.name, "role": "member"}
+    return workspace
 
 
 @router.post("/workspaces/{workspace_id}/transfer-admin/{user_id}", status_code=204)

@@ -15,8 +15,8 @@ Valores dos exemplos são em reais. O mês corrente deve ser controlável nos te
 | ID | Requisito / etapa | Cenário de aceite |
 |---|---|---|
 | RF-01 | Android online — E01/E02 | Dado o app no Android, ao abrir com internet carrega o serviço; sem conexão informa indisponibilidade e não confirma falsamente uma gravação. |
-| RF-02 | Cadastro e autenticação — E03 | Cadastrar e-mail/senha, sair e entrar novamente permite acessar o próprio espaço; senha incorreta nega acesso e não cria sessão. |
-| RF-03 | Espaço compartilhado — E03 | Usuário B aceita código criado por A e visualiza o mesmo espaço com login próprio. Usuário C sem participação não consulta nem altera seus dados, inclusive via API. |
+| RF-02 | Cadastro e autenticação — E03 | Cadastrar e-mail/senha sem convite cria e abre automaticamente um espaço pessoal; sair e entrar novamente abre esse mesmo espaço. Senha incorreta nega acesso e não cria sessão. |
+| RF-03 | Espaço compartilhado — E03 | Usuário B informa o código de A durante o cadastro e entra diretamente no espaço de A com login próprio, sem criar outro espaço. Cada login participa de no máximo um espaço; usuário C sem participação não consulta nem altera seus dados, inclusive via API. |
 | RF-04 | Administração — E03 | Administrador remove B; próximas operações de B são negadas. Participante comum não gera convites nem remove pessoas. Validade e transferência administrativa dependem de DEC-04. |
 | RF-05 | Contas e saldo inicial — E04 | Cadastrar conta bancária com R$ 1.000 e dinheiro com R$ 100 resulta em saldos individuais corretos e consolidado de R$ 1.100, sem tratar saldo inicial como receita do mês. |
 | RF-06 | Receita recebida — E04 | Lançar R$ 500 em uma conta com R$ 1.000 resulta imediatamente em R$ 1.500, sem segunda confirmação de recebimento. |

@@ -29,6 +29,9 @@ def require_member(db, workspace_id, user_id, *, admin=False, lock=False):
 def create(data: NameInput, db: Db, user: CurrentUser):
     from app.finance.categories import seed_categories
 
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    if db.scalar(select(Membership).where(Membership.user_id == user.id)):
+        raise HTTPException(409, "Você já participa de um espaço financeiro.")
     workspace = Workspace(name=data.name)
     db.add(workspace)
     db.flush()

@@ -236,9 +236,18 @@ def test_workspace_isolation_and_members_share_balance(client):
     )
     invite = client.post(f"{root}/invites", headers=owner).json()["code"]
     assert (
-        client.post("/invites/accept", headers=outsider, json={"code": invite}).status_code == 200
+        client.post("/invites/accept", headers=outsider, json={"code": invite}).status_code
+        == 409
     )
-    assert client.get(f"{root}/accounts", headers=outsider).json()[0]["balance_cents"] == 10000
+    registered = client.post(
+        "/auth/register",
+        json={"email": "guest@example.com", "password": "Senha-segura-123"},
+    )
+    guest = {"Authorization": "Bearer " + registered.json()["token"]}
+    assert (
+        client.post("/invites/accept", headers=guest, json={"code": invite}).status_code == 200
+    )
+    assert client.get(f"{root}/accounts", headers=guest).json()[0]["balance_cents"] == 10000
 
 
 def test_invalid_amount_and_account_input(client):

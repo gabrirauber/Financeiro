@@ -1,7 +1,15 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Uuid
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -37,7 +45,10 @@ class Workspace(Base):
 
 class Membership(Base):
     __tablename__ = "memberships"
-    __table_args__ = (CheckConstraint("role IN ('admin', 'member')", name="membership_role"),)
+    __table_args__ = (
+        CheckConstraint("role IN ('admin', 'member')", name="membership_role"),
+        UniqueConstraint("user_id", name="uq_membership_one_space_per_user"),
+    )
     workspace_id: Mapped[UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True
     )

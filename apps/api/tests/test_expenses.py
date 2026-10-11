@@ -154,7 +154,11 @@ def test_wrong_account_type_and_previous_month_rejected(client):
 
 def test_member_sees_shared_expense_and_old_month_cannot_be_deleted(client):
     owner, root, bank, category, sub = setup(client)
-    member, _, _, _, _ = setup(client, "member")
+    registered = client.post(
+        "/auth/register",
+        json={"email": f"member-{uuid4().hex}@example.com", "password": "Senha-segura-123"},
+    )
+    member = {"Authorization": "Bearer " + registered.json()["token"]}
     code = client.post(f"{root}/invites", headers=owner).json()["code"]
     assert client.post("/invites/accept", headers=member, json={"code": code}).status_code == 200
     created = client.post(

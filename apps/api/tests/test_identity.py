@@ -75,6 +75,74 @@ def test_registration_login_logout_and_session_expiry(client):
     assert client.get("/auth/me", headers={"Authorization": "Bearer " + token}).status_code == 401
 
 
+def test_registration_selects_exactly_one_space(client):
+    owner = client.post(
+        "/auth/register",
+        json={
+            "email": "owner@example.com",
+            "password": "Senha-segura-123",
+            "workspace_name": "Minha casa",
+        },
+    )
+    assert owner.status_code == 201, owner.text
+    owner_headers = {"Authorization": "Bearer " + owner.json()["token"]}
+    own_space = client.get("/workspaces", headers=owner_headers).json()
+    assert len(own_space) == 1
+    assert own_space[0]["name"] == "Minha casa"
+    assert own_space[0]["role"] == "admin"
+    assert (
+        client.post("/workspaces", headers=owner_headers, json={"name": "Outro"}).status_code
+        == 409
+    )
+
+    code = invite(client, owner_headers, own_space[0]["id"])["code"]
+    invited = client.post(
+        "/auth/register",
+        json={
+            "email": "guest@example.com",
+            "password": "Senha-segura-123",
+            "invite_code": code.lower(),
+        },
+    )
+    assert invited.status_code == 201, invited.text
+    guest_headers = {"Authorization": "Bearer " + invited.json()["token"]}
+    assert client.get("/workspaces", headers=guest_headers).json() == [
+        {"id": own_space[0]["id"], "name": "Minha casa", "role": "member"}
+    ]
+    assert (
+        client.post("/workspaces", headers=guest_headers, json={"name": "Outro"}).status_code
+        == 409
+    )
+    another_code = invite(client, owner_headers, own_space[0]["id"])["code"]
+    assert (
+        client.post(
+            "/invites/accept", headers=guest_headers, json={"code": another_code}
+        ).status_code
+        == 409
+    )
+
+    invalid = client.post(
+        "/auth/register",
+        json={
+            "email": "retry@example.com",
+            "password": "Senha-segura-123",
+            "invite_code": "INVALIDO",
+        },
+    )
+    assert invalid.status_code == 400
+    retry = client.post(
+        "/auth/register",
+        json={
+            "email": "retry@example.com",
+            "password": "Senha-segura-123",
+            "workspace_name": "Pessoal",
+        },
+    )
+    assert retry.status_code == 201, retry.text
+    retry_headers = {"Authorization": "Bearer " + retry.json()["token"]}
+    assert len(client.get("/workspaces", headers=retry_headers).json()) == 1
+
+
 def test_workspace_isolation_and_member_permissions(client):
     a = register(client, "a@example.com")
     b = register(client, "b@example.com")

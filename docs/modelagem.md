@@ -8,17 +8,19 @@ Atualização de contexto em 07/10/2026: tecnologias aprovadas em [ADR-0001](adr
 
 Aplicativo Android, conectado à internet, com autenticação por e-mail e senha e dados no servidor. Cada pessoa possui seu login e participa de um espaço financeiro compartilhável por código de convite. Conta financeira significa conta bancária ou dinheiro em espécie; não significa login.
 
+Refinamento de 11/10/2026: cada login pertence a um único espaço financeiro por vez. No cadastro, o código de convite é opcional: com código, a pessoa entra no espaço compartilhado; sem código, o aplicativo cria seu espaço pessoal. Após entrar, o aplicativo abre esse espaço diretamente, sem escolha entre vários espaços. Se um participante sair ou for removido, pode entrar em outro espaço por convite ou criar um espaço próprio, sem manter duas participações simultâneas.
+
 ## Fluxograma principal
 
 ```mermaid
 flowchart TD
     A[ Abrir aplicativo ] --> B{Sessão autenticada?}
     B -- Não --> C[Entrar ou cadastrar com e-mail e senha]
-    C --> D{Possui espaço financeiro?}
+    C --> D{Já participa de um espaço?}
     B -- Sim --> D
-    D -- Não --> E{Criar ou entrar?}
-    E -- Criar --> F[Criar espaço financeiro]
-    E -- Entrar --> G[Informar código de convite]
+    D -- Não --> E{Informou código no cadastro?}
+    E -- Não --> F[Criar espaço pessoal]
+    E -- Sim --> G[Validar código de convite]
     G --> H{Código válido?}
     H -- Não --> G
     H -- Sim --> I[Acessar espaço compartilhado]

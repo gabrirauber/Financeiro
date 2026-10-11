@@ -30,7 +30,7 @@ export function MembersPanel({ workspace, token, onClose, onChanged }: { workspa
     {workspace.role === 'admin' && <>
       <Text>Convite de uso único, válido por 24 horas.</Text>
       {!!created && <View style={{gap:8}}><Text selectable accessibilityLabel="Código gerado" style={{fontSize:22,fontWeight:'700'}}>{created.code}</Text>
-        <Button label="Compartilhar código" secondary onPress={() => void action(async () => { await Share.share({message: `Entre no meu espaço financeiro com o código ${created.code}. Válido por 24 horas, para uma pessoa.`}); })} />
+        <Button label="Compartilhar código" secondary onPress={() => void action(async () => { await Share.share({message: `Ao criar seu cadastro no Financeiro, informe o código ${created.code} para entrar no nosso espaço. Válido por 24 horas, para uma pessoa.`}); })} />
       </View>}
       {!busy && <Button label="Gerar código de convite" onPress={() => void action(async () => {
         const result = await request<{id:string;code:string}>(`/workspaces/${workspace.id}/invites`, token, 'POST'); setCreated(result); await load();

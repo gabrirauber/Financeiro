@@ -7,7 +7,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
 from app.identity.dependencies import CurrentUser, Db, bearer
-from app.identity.models import LoginSession, User
+from app.identity.models import LoginSession, Membership, User, Workspace
 from app.identity.security import DUMMY_HASH, create_session, digest, passwords, throttle
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -26,6 +26,18 @@ class PasswordInput(BaseModel):
 
 class Credentials(PasswordInput):
     email: EmailStr
+
+
+class Registration(Credentials):
+    invite_code: str | None = Field(default=None, max_length=64)
+    workspace_name: str | None = Field(default=None, max_length=80)
+
+    @field_validator("invite_code", "workspace_name")
+    @classmethod
+    def clean_optional(cls, value):
+        if value is None:
+            return None
+        return " ".join(value.split()) or None
 
 
 class EmailInput(BaseModel):
@@ -54,14 +66,28 @@ def limit_credentials(db, request, email):
 
 
 @router.post("/register", status_code=201)
-def register(data: Credentials, request: Request, response: Response, db: Db):
+def register(data: Registration, request: Request, response: Response, db: Db):
     limit_credentials(db, request, data.email)
+    if data.invite_code and data.workspace_name:
+        raise HTTPException(422, "Escolha criar seu espaço ou entrar com um código.")
     user = User(
         email=normalize(data.email), password_hash=passwords.hash(data.password.get_secret_value())
     )
     db.add(user)
     try:
         db.flush()
+        if data.invite_code:
+            from app.identity.invites import claim_invite
+
+            claim_invite(db, user, data.invite_code)
+        elif data.workspace_name:
+            from app.finance.categories import seed_categories
+
+            workspace = Workspace(name=data.workspace_name)
+            db.add(workspace)
+            db.flush()
+            db.add(Membership(workspace_id=workspace.id, user_id=user.id, role="admin"))
+            seed_categories(db, workspace.id)
         result = create_session(db, user.id)
         db.commit()
     except IntegrityError:
