@@ -1,6 +1,6 @@
-# Financeiro API — E05
+# Financeiro API — E06
 
-Python 3.13, FastAPI, SQLAlchemy, PostgreSQL e Alembic. A API mantém usuários, espaços compartilhados, contas, receitas, transferências, categorias, subcategorias e despesas pagas.
+Python 3.13, FastAPI, SQLAlchemy, PostgreSQL e Alembic. A API mantém usuários, espaços compartilhados, contas, receitas, transferências, categorias, subcategorias, despesas pagas, cartões, parcelas e faturas.
 
 ## Desenvolvimento local
 

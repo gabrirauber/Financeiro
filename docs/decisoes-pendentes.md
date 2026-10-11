@@ -26,7 +26,7 @@ Afeta RF-11/24/26/27, E04–E09.
 
 Proposta: movimentos de caixa são editáveis conforme sua data financeira; parcelas conforme o mês de vencimento. Meses anteriores ficam protegidos. Parcela de compra antiga pode ser corrigida no mês corrente se ainda não paga, preservando as anteriores. Pendências antigas continuam no saldo final projetado como atrasadas, sem reapresentá-las como novo consumo do mês.
 
-Detalhe ainda a decidir antes de E06: corrigir uma fatura já paga será bloqueado ou exigirá desfazer explicitamente o pagamento elegível do mês corrente? Não alterar automaticamente saldos quitados. Também definir o tratamento de uma ocorrência futura individual: a regra atual permite mudar a série daqui para frente, não libera edição indiscriminada de qualquer mês.
+Decisão E06: fatura paga fica bloqueada. Correção de compra parcelada redistribui apenas parcelas do mês corrente e futuras que ainda não estejam pagas; parcelas de meses anteriores e de faturas pagas permanecem intactas. Edição individual de uma ocorrência futura permanece fora desta etapa.
 
 ## DEC-04 — Convites e administração
 

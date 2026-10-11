@@ -1,6 +1,6 @@
-# Financeiro — aplicativo E05
+# Financeiro — aplicativo E06
 
-Interface React Native/Expo com TypeScript. Acesso, contas, categorias e despesas pagas usam a API e persistem no PostgreSQL. Configure EXPO_PUBLIC_API_URL conforme .env.example. Cartões continuam ilustrativos até a E06.
+Interface React Native/Expo com TypeScript. Acesso, contas, categorias, despesas pagas, cartões e faturas usam a API e persistem no PostgreSQL. Configure EXPO_PUBLIC_API_URL conforme .env.example.
 
 ## Executar
 
@@ -38,7 +38,8 @@ Exportar o bundle não instala nem testa o app em um Android. O lockfile deve ac
 - `App.tsx`: painel real, abas e seleção de mês.
 - `src/ExpenseForm.tsx`: formulário e validações de entrada.
 - `src/finance.ts`: tipos dos dados financeiros.
-- `src/prototype.ts`: formatação e exemplos de cartões.
+- `src/CardPanel.tsx`: cartões, faturas, pagamento e correções de parcelas.
+- `src/prototype.ts`: formatação de valores e datas.
 - `src/ui.tsx`: componentes visuais reutilizados.
 
 Base extraída do template oficial `expo-template-blank-typescript@57.0.29`, com dependências conferidas pelo Expo. [Referência do template](https://docs.expo.dev/more/create-expo/).

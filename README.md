@@ -1,6 +1,6 @@
 # Financeiro
 
-Aplicativo Android para controle financeiro pessoal e compartilhado. Na E05, acesso, espaços, contas, receitas, transferências, categorias e despesas pagas já usam PostgreSQL. A tela de cartões ainda é uma prévia para a E06.
+Aplicativo Android para controle financeiro pessoal e compartilhado. Na E06, acesso, espaços, contas, receitas, transferências, categorias, despesas, cartões, parcelas e faturas usam PostgreSQL. A E06 está local para revisão antes do push.
 
 ## Documentação
 
@@ -12,13 +12,14 @@ Aplicativo Android para controle financeiro pessoal e compartilhado. Na E05, ace
 - [Revisão da E00](docs/revisao-e00.md)
 - [Executar o protótipo](apps/mobile/README.md)
 - [Revisão da E05](docs/revisao-e05.md)
+- [Revisão da E06](docs/revisao-e06.md)
 - [Revisão da E01](docs/revisao-e01.md)
 
 ## Fluxo de trabalho
 
 Uma etapa autorizada por vez, com commits locais pequenos. **O cliente faz code review antes de qualquer push.** Aprovar uma etapa ou criar um commit não autoriza envio ao remoto, publicação nem início da próxima etapa.
 
-Instruções de execução e verificações estão nos READMEs do aplicativo e da API. A E05 permanece local até o review e autorização de push.
+Instruções de execução e verificações estão nos READMEs do aplicativo e da API. A E06 permanece local até o review e autorização de push.
 
 ## Histórico: E02 — base técnica
 
