@@ -11,6 +11,7 @@ from app.finance.card_models import (
     CreditCard,
     FinancingInstallment,
     Invoice,
+    InvoiceAdvance,
     InvoiceFinancing,
 )
 from app.finance.categories import category_or_404, subcategory_or_404
@@ -97,7 +98,7 @@ def installment_rows(db, invoice_id):
     ).all()
 
 
-def serialize_installment(row, purchase, invoice, card):
+def serialize_installment(row, purchase, invoice, card, settled=False):
     return {
         "id": row.id,
         "purchase_id": purchase.id,
@@ -105,7 +106,7 @@ def serialize_installment(row, purchase, invoice, card):
         "card_name": card.name,
         "invoice_id": invoice.id,
         "invoice_month": invoice.month,
-        "invoice_paid": invoice.paid_on is not None,
+        "invoice_paid": invoice.paid_on is not None or settled,
         "purchased_on": purchase.purchased_on,
         "legacy": purchase.legacy,
         "sequence": row.sequence,
@@ -146,14 +147,35 @@ def invoice_total(db, invoice_id):
     return purchases + financed
 
 
-def serialize_financing_installment(row, financing, invoice, card):
+def invoice_advance_total(db, invoice_id):
+    return (
+        db.scalar(
+            select(func.sum(InvoiceAdvance.amount_cents)).where(
+                InvoiceAdvance.invoice_id == invoice_id
+            )
+        )
+        or 0
+    )
+
+
+def invoice_remaining(db, invoice_id):
+    return invoice_total(db, invoice_id) - invoice_advance_total(db, invoice_id)
+
+
+def invoice_settled(db, invoice, current):
+    return invoice.paid_on is not None or (
+        current > invoice.closes_on and invoice_remaining(db, invoice.id) == 0
+    )
+
+
+def serialize_financing_installment(row, financing, invoice, card, settled=False):
     return {
         "id": row.id,
         "financing_id": financing.id,
         "source_invoice_id": financing.source_invoice_id,
         "invoice_id": invoice.id,
         "invoice_month": invoice.month,
-        "invoice_paid": invoice.paid_on is not None,
+        "invoice_paid": invoice.paid_on is not None or settled,
         "card_id": card.id,
         "card_name": card.name,
         "sequence": row.sequence,
@@ -170,6 +192,15 @@ def serialize_invoice(db, invoice, card, current):
     financing = db.scalar(
         select(InvoiceFinancing).where(InvoiceFinancing.source_invoice_id == invoice.id)
     )
+    advances = db.scalars(
+        select(InvoiceAdvance)
+        .where(InvoiceAdvance.invoice_id == invoice.id)
+        .order_by(InvoiceAdvance.id)
+    ).all()
+    advance_total = sum(item.amount_cents for item in advances)
+    total = invoice_total(db, invoice.id)
+    remaining = total - advance_total
+    settled = current > invoice.closes_on and remaining == 0
     return {
         "id": invoice.id,
         "card_id": card.id,
@@ -182,18 +213,23 @@ def serialize_invoice(db, invoice, card, current):
         if financing
         else "paid"
         if invoice.paid_on
-        else ("open" if current <= invoice.closes_on else "closed"),
+        else "open"
+        if current <= invoice.closes_on
+        else "settled"
+        if settled
+        else "closed",
         "purchase_total_cents": sum(item.amount_cents for item, _ in installments),
         "financed_total_cents": sum(item.amount_cents for item, _ in financed_rows),
-        "total_cents": (
-            sum(item.amount_cents for item, _ in installments)
-            + sum(item.amount_cents for item, _ in financed_rows)
-        ),
+        "total_cents": total,
+        "advanced_cents": advance_total,
+        "remaining_cents": 0 if invoice.paid_on else remaining,
+        "advances": [{"id": item.id, "amount_cents": item.amount_cents} for item in advances],
         "installments": [
-            serialize_installment(item, purchase, invoice, card) for item, purchase in installments
+            serialize_installment(item, purchase, invoice, card, settled)
+            for item, purchase in installments
         ],
         "financing_installments": [
-            serialize_financing_installment(item, source, invoice, card)
+            serialize_financing_installment(item, source, invoice, card, settled)
             for item, source in financed_rows
         ],
         "financing": None
@@ -266,10 +302,10 @@ def edit_card(workspace_id: UUID, card_id: UUID, data: CardInput, db: Db, user: 
     return serialize_card(card)
 
 
-def ensure_invoice(db, card, month):
+def ensure_invoice(db, card, month, current=None):
     row = db.scalar(select(Invoice).where(Invoice.card_id == card.id, Invoice.month == month))
     if row:
-        if row.paid_on:
+        if row.paid_on or (current is not None and invoice_settled(db, row, current)):
             raise HTTPException(409, "Fatura paga: não é possível alterar suas compras.")
         return row
     _, closes_on, due_on = cycle_for_due_month(card, month)
@@ -330,7 +366,7 @@ def create_purchase(workspace_id: UUID, data: PurchaseInput, db: Db, user: Curre
             month = shift_month(first, index)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
-        invoice = ensure_invoice(db, card, month)
+        invoice = ensure_invoice(db, card, month, current)
         row = CardInstallment(
             purchase_id=purchase.id,
             invoice_id=invoice.id,
@@ -360,7 +396,7 @@ def list_month_installments(
     user: CurrentUser,
     month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
 ):
-    require_member(db, workspace_id, user.id)
+    workspace, _ = require_member(db, workspace_id, user.id)
     year, number = map(int, month.split("-"))
     if year < 1:
         raise HTTPException(422, "Mês inválido.")
@@ -374,7 +410,9 @@ def list_month_installments(
         .order_by(CreditCard.name, CardInstallment.id)
     ).all()
     return [
-        serialize_installment(item, purchase, invoice, card)
+        serialize_installment(
+            item, purchase, invoice, card, invoice_settled(db, invoice, today(workspace))
+        )
         for item, purchase, invoice, card in rows
     ]
 
@@ -421,7 +459,7 @@ def pay_invoice(
     if account.kind != "bank":
         raise HTTPException(422, "Pague a fatura por uma conta bancária.")
     require_after_opening(account, current)
-    total = invoice_total(db, invoice.id)
+    total = invoice_remaining(db, invoice.id)
     if total == 0:
         raise HTTPException(422, "Esta fatura não tem parcelas.")
     movement = Movement(
@@ -460,7 +498,7 @@ def edit_remaining(
     editable = [
         (item, invoice)
         for item, invoice in rows
-        if invoice.month >= current_month and not invoice.paid_on
+        if invoice.month >= current_month and not invoice_settled(db, invoice, today(workspace))
     ]
     if not editable:
         raise HTTPException(409, "Esta compra não tem parcelas atuais ou futuras não pagas.")
@@ -470,7 +508,15 @@ def edit_remaining(
     sub = subcategory_or_404(db, category.id, data.subcategory_id)
     if not category.active or not sub.active:
         raise HTTPException(422, "Escolha uma categoria e subcategoria ativas.")
-    for (item, _), cents in zip(editable, split_cents(data.remaining_total_cents, len(editable))):
+    parts = split_cents(data.remaining_total_cents, len(editable))
+    for (item, invoice), cents in zip(editable, parts):
+        if invoice_total(db, invoice.id) - item.amount_cents + cents < invoice_advance_total(
+            db, invoice.id
+        ):
+            raise HTTPException(
+                422, "A correção não pode deixar a fatura abaixo do valor antecipado."
+            )
+    for (item, _), cents in zip(editable, parts):
         item.amount_cents = cents
         item.category_id = category.id
         item.subcategory_id = sub.id

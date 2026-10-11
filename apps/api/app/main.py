@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Settings
 from app.database import build_engine, database_ready
-from app.finance import cards, categories, expenses, financing
+from app.finance import advances, cards, categories, expenses, financing
 from app.finance import routes as finance
 from app.identity import auth, invites, recovery, workspaces
 from app.validation import validation_message
@@ -60,6 +60,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(expenses.router)
     app.include_router(cards.router)
     app.include_router(financing.router)
+    app.include_router(advances.router)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):

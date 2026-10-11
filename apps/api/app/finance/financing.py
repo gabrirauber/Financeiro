@@ -16,7 +16,7 @@ from app.finance.card_models import (
 from app.finance.cards import (
     ensure_invoice,
     invoice_or_404,
-    invoice_total,
+    invoice_remaining,
     serialize_financing_installment,
     serialize_invoice,
 )
@@ -69,7 +69,7 @@ def pay_partial(
         raise HTTPException(409, "Esta fatura já foi paga.")
     if current <= invoice.closes_on:
         raise HTTPException(422, "A fatura ainda está aberta. Aguarde o fechamento.")
-    total = invoice_total(db, invoice.id)
+    total = invoice_remaining(db, invoice.id)
     if not 0 < data.paid_cents < total:
         raise HTTPException(422, "O pagamento parcial deve ser menor que o total da fatura.")
     principal = total - data.paid_cents
@@ -110,7 +110,7 @@ def pay_partial(
     principal_parts = split_cents(principal, data.installment_count)
     fee_parts = distribute_nonnegative(data.fee_cents, data.installment_count)
     for index, month in enumerate(months):
-        future = ensure_invoice(db, card, month)
+        future = ensure_invoice(db, card, month, current)
         db.add(
             FinancingInstallment(
                 financing_id=financing.id,

@@ -17,6 +17,7 @@ from app.finance.card_models import (
     CreditCard,
     FinancingInstallment,
     Invoice,
+    InvoiceAdvance,
     InvoiceFinancing,
 )
 from app.finance.models import Account, Expense, Movement
@@ -43,6 +44,7 @@ def client(monkeypatch):
     app = create_app(Settings(app_env="test"))
     with Session(app.state.engine) as db:
         for model in (
+            InvoiceAdvance,
             FinancingInstallment,
             InvoiceFinancing,
             CardInstallment,
@@ -68,6 +70,7 @@ def client(monkeypatch):
         finally:
             with Session(app.state.engine) as db:
                 for model in (
+                    InvoiceAdvance,
                     FinancingInstallment,
                     InvoiceFinancing,
                     CardInstallment,

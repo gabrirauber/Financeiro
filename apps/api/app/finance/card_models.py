@@ -132,3 +132,19 @@ class FinancingInstallment(Base):
     principal_cents: Mapped[int] = mapped_column(Integer)
     fee_cents: Mapped[int] = mapped_column(Integer)
     amount_cents: Mapped[int] = mapped_column(Integer)
+
+
+class InvoiceAdvance(Base):
+    __tablename__ = "invoice_advances"
+    __table_args__ = (
+        UniqueConstraint("invoice_id", "request_id", name="uq_invoice_advance_request"),
+        CheckConstraint("amount_cents > 0", name="invoice_advance_positive"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    invoice_id: Mapped[UUID] = mapped_column(
+        ForeignKey("invoices.id", ondelete="CASCADE"), index=True
+    )
+    movement_id: Mapped[UUID] = mapped_column(ForeignKey("movements.id"), unique=True)
+    request_id: Mapped[str] = mapped_column(String(80))
+    amount_cents: Mapped[int] = mapped_column(Integer)
