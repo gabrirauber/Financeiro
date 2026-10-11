@@ -38,7 +38,8 @@ class Movement(Base):
     __tablename__ = "movements"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('income', 'transfer_out', 'transfer_in', 'expense')", name="movement_kind"
+            "kind IN ('income', 'transfer_out', 'transfer_in', 'expense', 'bill_payment')",
+            name="movement_kind",
         ),
         CheckConstraint("amount_cents > 0", name="movement_amount_positive"),
     )

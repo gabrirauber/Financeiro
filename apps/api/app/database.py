@@ -31,4 +31,4 @@ def build_engine(settings: Settings):
 def database_ready(engine) -> bool:
     with engine.connect() as connection:
         version = connection.scalar(select(AppMetadata.value).where(AppMetadata.key == "schema"))
-        return version == "e05"
+        return version == "e06"

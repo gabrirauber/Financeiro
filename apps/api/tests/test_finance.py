@@ -11,6 +11,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.config import Settings
+from app.finance.card_models import CardInstallment, CardPurchase, CreditCard, Invoice
 from app.finance.models import Account, Expense, Movement
 from app.identity.models import (
     Invite,
@@ -35,6 +36,10 @@ def client(monkeypatch):
     app = create_app(Settings(app_env="test"))
     with Session(app.state.engine) as db:
         for model in (
+            CardInstallment,
+            CardPurchase,
+            Invoice,
+            CreditCard,
             Expense,
             Movement,
             Account,

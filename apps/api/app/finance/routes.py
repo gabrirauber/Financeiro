@@ -69,7 +69,7 @@ def require_after_opening(account, day):
 def account_balances(db, workspace_id):
     # Saldos derivados do mesmo extrato que o usuário consulta; nunca há dois saldos a sincronizar.
     signed = case(
-        (Movement.kind.in_(("transfer_out", "expense")), -Movement.amount_cents),
+        (Movement.kind.in_(("transfer_out", "expense", "bill_payment")), -Movement.amount_cents),
         else_=Movement.amount_cents,
     )
     totals = dict(

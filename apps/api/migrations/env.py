@@ -2,6 +2,7 @@ from alembic import context
 
 from app.config import Settings
 from app.database import Base, build_engine
+from app.finance import card_models  # noqa: F401
 from app.finance import models as finance_models  # noqa: F401
 from app.identity import models  # noqa: F401
 
