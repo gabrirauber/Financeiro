@@ -133,14 +133,15 @@ Uma única API organizada por módulos. Estrutura proposta: `apps/api`, `apps/mo
 
 ### E07 — Pagamento parcial e financiamento da fatura
 
-**Entrega:** pagamento parcial com lançamento guiado do restante, juros informados manualmente, parcelas futuras e identificação “Faturas parceladas”.
+**Entrega:** antecipação de pagamento em fatura aberta; pagamento parcial com lançamento guiado do restante, juros informados manualmente, parcelas futuras e identificação “Faturas parceladas”.
 
 **Commits previstos:**
 
 - `feat(faturas): registrar pagamento parcial com refinanciamento`
 - `feat(painel): identificar parcelas de faturas financiadas`
+- `feat(faturas): antecipar pagamentos antes do fechamento`
 
-**Aceite:** fatura de R$ 1.000 paga em R$ 600, com R$ 40 de encargos sobre os R$ 400 restantes, gera duas parcelas futuras de R$ 220. Saída atual é R$ 600. Cancelar antes da confirmação não modifica caixa nem encerra fatura. Repetir a mesma confirmação não duplica o pagamento. Histórico preserva compras originais e relatórios distinguem principal refinanciado de consumo novo.
+**Aceite:** fatura de R$ 1.000 paga em R$ 600, com R$ 40 de encargos sobre os R$ 400 restantes, gera duas parcelas futuras de R$ 220. Saída atual é R$ 600. Cancelar antes da confirmação não modifica caixa nem encerra fatura. Repetir a mesma confirmação não duplica o pagamento. Histórico preserva compras originais e relatórios distinguem principal refinanciado de consumo novo. Uma antecipação antes do fechamento reduz o saldo a pagar sem encerrar a fatura; novas compras do ciclo ainda entram nela. Depois do fechamento, pagar ou financiar usa apenas o saldo restante, sem cobrar novamente o valor antecipado.
 
 **Revisão do cliente:** testar o fluxo e conferir o gráfico nos meses seguintes.
 

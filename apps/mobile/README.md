@@ -1,6 +1,6 @@
 # Financeiro — aplicativo E07
 
-Interface React Native/Expo com TypeScript. Acesso, contas, categorias, despesas pagas, cartões, faturas e pagamentos parciais usam a API e persistem no PostgreSQL. Configure EXPO_PUBLIC_API_URL conforme .env.example.
+Interface React Native/Expo com TypeScript. Acesso, contas, categorias, despesas pagas, cartões, faturas, antecipações e pagamentos parciais usam a API e persistem no PostgreSQL. Configure EXPO_PUBLIC_API_URL conforme .env.example.
 
 ## Executar
 

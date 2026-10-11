@@ -1,6 +1,6 @@
 # Financeiro
 
-Aplicativo Android para controle financeiro pessoal e compartilhado. Na E07, acesso, espaços, contas, receitas, despesas, cartões, faturas e pagamentos parciais usam PostgreSQL. A E07 está local para revisão antes do push.
+Aplicativo Android para controle financeiro pessoal e compartilhado. Na E07, acesso, espaços, contas, receitas, despesas, cartões, faturas, antecipações e pagamentos parciais usam PostgreSQL. A E07 está local para revisão antes do push.
 
 ## Documentação
 
