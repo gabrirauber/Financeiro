@@ -8,6 +8,7 @@ import { Button, Card, Chip, palette } from './ui';
 const input = { backgroundColor: 'white', borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink };
 const label = { color: palette.ink, fontSize: 15, fontWeight: '600' as const };
 const muted = { color: palette.muted, fontSize: 13, lineHeight: 20 };
+const centsToInput = (cents: number) => (cents / 100).toFixed(2).replace('.', ',');
 
 export function CardPanel({ workspace, token, refresh }: {
   workspace: Workspace; token: string; refresh: () => void;
@@ -22,14 +23,14 @@ export function CardPanel({ workspace, token, refresh }: {
   const [showCreate, setShowCreate] = useState(false);
   const [editingCard, setEditingCard] = useState<string>();
   const [legacyCard, setLegacyCard] = useState<string>();
-  const [legacyAmount, setLegacyAmount] = useState('');
+  const [legacyAmount, setLegacyAmount] = useState('200,00');
   const [legacyCount, setLegacyCount] = useState('');
   const [legacyCategory, setLegacyCategory] = useState('');
   const [legacySubcategory, setLegacySubcategory] = useState('');
   const [legacyNote, setLegacyNote] = useState('');
   const [name, setName] = useState('');
-  const [closing, setClosing] = useState('');
-  const [due, setDue] = useState('');
+  const [closing, setClosing] = useState('10');
+  const [due, setDue] = useState('20');
   const [nextBill, setNextBill] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -38,11 +39,11 @@ export function CardPanel({ workspace, token, refresh }: {
   const [remainingAmount, setRemainingAmount] = useState('');
   const [remainingNote, setRemainingNote] = useState('');
   const [partialOpen, setPartialOpen] = useState(false);
-  const [partialAmount, setPartialAmount] = useState('');
+  const [partialAmount, setPartialAmount] = useState('600,00');
   const [partialFees, setPartialFees] = useState('0,00');
   const [partialCount, setPartialCount] = useState('2');
   const [advanceOpen, setAdvanceOpen] = useState(false);
-  const [advanceAmount, setAdvanceAmount] = useState('');
+  const [advanceAmount, setAdvanceAmount] = useState('100,00');
   const [advanceRequestId, setAdvanceRequestId] = useState('');
   async function load() {
     const [allCards, allInvoices, allAccounts, allCategories] = await Promise.all([
@@ -67,7 +68,7 @@ export function CardPanel({ workspace, token, refresh }: {
         name: name.trim(), closing_day: closeNumber, due_day: dueNumber,
         closing_day_next_bill: nextBill,
       });
-      setShowCreate(false); setEditingCard(undefined); setName(''); setClosing(''); setDue(''); setNextBill(false);
+      setShowCreate(false); setEditingCard(undefined); setName(''); setClosing('10'); setDue('20'); setNextBill(false);
       setNotice(editingCard ? 'Cartão atualizado. As faturas já criadas mantêm as datas anteriores.' :
         'Cartão cadastrado. Você já pode lançar compras no crédito pelo +.');
       await load(); refresh();
@@ -81,11 +82,11 @@ export function CardPanel({ workspace, token, refresh }: {
   }
   function cancelCardForm() {
     setShowCreate(false); setEditingCard(undefined);
-    setName(''); setClosing(''); setDue(''); setNextBill(false); setError('');
+    setName(''); setClosing('10'); setDue('20'); setNextBill(false); setError('');
   }
   function startLegacy(card: CreditCard) {
     setLegacyCard(card.id); cancelCardForm();
-    setLegacyAmount(''); setLegacyCount(''); setLegacyCategory(''); setLegacySubcategory('');
+    setLegacyAmount('200,00'); setLegacyCount(''); setLegacyCategory(''); setLegacySubcategory('');
     setLegacyNote(''); setError('');
   }
   async function saveLegacy() {
@@ -146,8 +147,8 @@ export function CardPanel({ workspace, token, refresh }: {
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível registrar o pagamento parcial.'); }
     finally { setBusy(false); }
   }
-  function startAdvance() {
-    setAdvanceOpen(true); setAdvanceAmount(''); setError('');
+  function startAdvance(invoice: Invoice) {
+    setAdvanceOpen(true); setAdvanceAmount(centsToInput(Math.min(10000, invoice.remaining_cents))); setError('');
     setAdvanceRequestId(`${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
   }
   async function advance(invoice: Invoice) {
@@ -198,9 +199,9 @@ export function CardPanel({ workspace, token, refresh }: {
         <Text style={label}>Nome do cartão *</Text>
         <TextInput accessibilityLabel="Nome do cartão" style={input} value={name} onChangeText={setName} placeholder="Ex.: Cartão principal" />
         <Text style={label}>Dia de fechamento *</Text>
-        <TextInput accessibilityLabel="Dia de fechamento" style={input} value={closing} onChangeText={setClosing} keyboardType="number-pad" maxLength={2} placeholder="10" />
+        <TextInput accessibilityLabel="Dia de fechamento" style={input} value={closing} onChangeText={setClosing} keyboardType="number-pad" maxLength={2} />
         <Text style={label}>Dia de vencimento *</Text>
-        <TextInput accessibilityLabel="Dia de vencimento" style={input} value={due} onChangeText={setDue} keyboardType="number-pad" maxLength={2} placeholder="20" />
+        <TextInput accessibilityLabel="Dia de vencimento" style={input} value={due} onChangeText={setDue} keyboardType="number-pad" maxLength={2} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <Switch accessibilityLabel="Compra no fechamento vai para a próxima fatura" value={nextBill} onValueChange={setNextBill} />
           <Text style={[muted, { flex: 1 }]}>Compra no dia do fechamento entra na próxima fatura</Text>
@@ -243,12 +244,12 @@ export function CardPanel({ workspace, token, refresh }: {
       {current.status === 'open' && current.remaining_cents > 0 && <Card>
         <Text style={label}>Antecipar pagamento</Text>
         <Text style={muted}>Você pode pagar antes do fechamento. Novas compras ainda podem entrar nesta fatura e aumentar o saldo.</Text>
-        {!advanceOpen ? <Button label="Antecipar pagamento" secondary onPress={startAdvance} /> : <>
+        {!advanceOpen ? <Button label="Antecipar pagamento" secondary onPress={() => startAdvance(current)} /> : <>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{accounts.filter(a => a.kind === 'bank').map(a =>
             <Chip key={a.id} label={a.name} selected={payAccount === a.id} onPress={() => setPayAccount(a.id)} />)}</View>
           <Text style={label}>Valor a antecipar *</Text>
           <TextInput accessibilityLabel="Valor da antecipação" style={input} value={advanceAmount}
-            onChangeText={setAdvanceAmount} keyboardType="decimal-pad" placeholder="100,00" />
+            onChangeText={setAdvanceAmount} keyboardType="decimal-pad" />
           <Text style={muted}>Saldo atual da fatura: {money(current.remaining_cents)}. O valor informado sai da conta agora.</Text>
           <Button label={busy ? 'Registrando…' : 'Confirmar antecipação'}
             onPress={() => { if (!busy) void advance(current); }} />
@@ -274,11 +275,11 @@ export function CardPanel({ workspace, token, refresh }: {
         <Button label={busy ? 'Pagando…' : `Pagar saldo de ${money(current.remaining_cents)}`}
           onPress={() => { if (!busy) void pay(current); }} />
         <Button label="Pagar parcialmente e parcelar restante" secondary
-          onPress={() => { setPartialOpen(true); setError(''); }} />
+          onPress={() => { setPartialOpen(true); setPartialAmount(centsToInput(Math.min(60000, Math.floor(current.remaining_cents / 2)))); setError(''); }} />
         {partialOpen && <>
           <Text style={label}>Valor pago agora *</Text>
           <TextInput accessibilityLabel="Valor do pagamento parcial" style={input} value={partialAmount}
-            onChangeText={setPartialAmount} keyboardType="decimal-pad" placeholder="600,00" />
+            onChangeText={setPartialAmount} keyboardType="decimal-pad" />
           <Text style={label}>Juros e encargos totais *</Text>
           <TextInput accessibilityLabel="Juros e encargos do financiamento" style={input} value={partialFees}
             onChangeText={setPartialFees} keyboardType="decimal-pad" placeholder="0,00" />
@@ -315,7 +316,7 @@ export function CardPanel({ workspace, token, refresh }: {
           <Text style={muted}>Informe o valor de cada parcela e quantas faltam. A primeira entra na fatura de {monthIso(new Date()).split('-').reverse().join('/')}.</Text>
           <Text style={label}>Valor de cada parcela *</Text>
           <TextInput accessibilityLabel="Valor de cada parcela antiga" style={input} value={legacyAmount}
-            onChangeText={setLegacyAmount} keyboardType="decimal-pad" placeholder="200,00" />
+            onChangeText={setLegacyAmount} keyboardType="decimal-pad" />
           <Text style={label}>Quantidade de parcelas restantes *</Text>
           <TextInput accessibilityLabel="Quantidade de parcelas restantes" style={input} value={legacyCount}
             onChangeText={setLegacyCount} keyboardType="number-pad" maxLength={3} />
@@ -337,7 +338,7 @@ export function CardPanel({ workspace, token, refresh }: {
         {invoices.filter(i => i.card_id === card.id).length ? invoices.filter(i => i.card_id === card.id).map(invoice =>
           <Button key={invoice.id} secondary
             label={`${invoice.month.slice(0, 7).split('-').reverse().join('/')} · saldo ${money(invoice.remaining_cents)} · ${invoice.status === 'refinanced' ? 'Parcelada' : invoice.status === 'paid' ? 'Paga' : invoice.status === 'settled' ? 'Quitada' : invoice.status === 'open' ? 'Aberta' : 'Fechada'}`}
-            onPress={() => { setSelected(invoice.id); setPartialOpen(false); setAdvanceOpen(false); setPartialAmount(''); setPartialFees('0,00'); setPartialCount('2'); }} />) :
+            onPress={() => { setSelected(invoice.id); setPartialOpen(false); setAdvanceOpen(false); setPartialAmount(centsToInput(Math.min(60000, Math.floor(invoice.remaining_cents / 2)))); setPartialFees('0,00'); setPartialCount('2'); }} />) :
           <Text style={muted}>Ainda não há compras neste cartão.</Text>}
       </Card>)}
       {!cards.length && <Card><Text style={muted}>Cadastre seu primeiro cartão para lançar compras parceladas.</Text></Card>}

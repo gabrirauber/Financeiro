@@ -54,7 +54,7 @@ export function AccountsPanel({ workspace, token }: { workspace: Workspace; toke
     setMode(null); setEditing(undefined); setName(''); setAmount(''); setNote('');
     setDate(localDate()); setError('');
   }
-  function start(next: Mode) { reset(); setMode(next); setSource(selected || accounts[0]?.id || ''); setDestination(accounts.find(a => a.id !== (selected || accounts[0]?.id))?.id || ''); }
+  function start(next: Mode) { reset(); setMode(next); setAmount(next === 'account' ? '0,00' : ''); setSource(selected || accounts[0]?.id || ''); setDestination(accounts.find(a => a.id !== (selected || accounts[0]?.id))?.id || ''); }
   function startEdit(row: Movement) {
     setMode('income'); setEditing(row.id); setSource(selected || '');
     setAmount((row.amount_cents / 100).toFixed(2).replace('.', ','));
@@ -124,7 +124,7 @@ export function AccountsPanel({ workspace, token }: { workspace: Workspace; toke
       {mode === 'account' && <>{field('Descrição', name, setName, { placeholder: 'Ex.: Conta principal' })}<View style={{ flexDirection: 'row', gap: 8 }}><Chip label="Banco" selected={kind === 'bank'} onPress={() => setKind('bank')} /><Chip label="Dinheiro" selected={kind === 'cash'} onPress={() => setKind('cash')} /></View></>}
       {mode !== 'account' && <><Text style={{ color: palette.ink }}>Conta {mode === 'transfer' ? 'de origem' : 'de recebimento'}</Text><ScrollView horizontal contentContainerStyle={{ gap: 8 }}>{accounts.map(item => <Chip key={item.id} label={item.name} selected={source === item.id} onPress={() => setSource(item.id)} />)}</ScrollView></>}
       {mode === 'transfer' && <><Text style={{ color: palette.ink }}>Conta de destino</Text><ScrollView horizontal contentContainerStyle={{ gap: 8 }}>{accounts.map(item => <Chip key={item.id} label={item.name} selected={destination === item.id} onPress={() => setDestination(item.id)} />)}</ScrollView></>}
-      {field(mode === 'account' ? 'Saldo inicial (R$)' : 'Valor (R$)', amount, setAmount, { keyboardType: 'decimal-pad', placeholder: '0,00' })}
+      {field(mode === 'account' ? 'Saldo inicial (R$)' : 'Valor (R$)', amount, setAmount, { keyboardType: 'decimal-pad', placeholder: mode === 'account' ? undefined : 'Informe o valor' })}
       {mode !== 'account' && <>{field('Data (DD/MM/AAAA)', date, setDate, { keyboardType: 'numbers-and-punctuation' })}{field('Observação (opcional)', note, setNote, { placeholder: 'Ex.: Salário' })}</>}
       <Button label={busy ? 'Salvando…' : 'Salvar'} onPress={() => { if (!busy) void save(); }} />
       <Button label="Cancelar" secondary onPress={reset} />

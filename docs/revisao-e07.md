@@ -12,6 +12,8 @@ Branch local: `etapa/07-pagamento-parcial`. Base: E06 (`b55a685`). Sem push da E
 6. A fatura original passa a indicar pagamento parcial e mostra o valor pago, o principal financiado e os encargos. As compras originais permanecem no histórico. Navegue pelos próximos meses no **Resumo**: **Faturas parceladas** aparece separadamente, com principal e encargos. A seção de consumo mostra compras e despesas novas; principal refinanciado não é nova compra.
 7. Nas faturas futuras, as parcelas financiadas entram no total a pagar. Pagar integralmente uma dessas faturas reduz o caixa uma vez.
 
+Campos numéricos que já mostram um valor vêm preenchidos de verdade: antecipação (até R$ 100 ou o saldo menor), pagamento parcial (metade do saldo, até R$ 600), encargos (R$ 0), duas parcelas futuras, parcelas antigas (R$ 200), dias 10/20 no novo cartão e saldo inicial de R$ 0. Se não forem alterados, esses valores são usados ao salvar. Campos com “Ex.:”, formato de data ou “Informe o valor” são apenas orientações; valores obrigatórios ausentes continuam validados.
+
 Um segundo envio do mesmo pagamento parcial devolve a operação existente sem outro débito ou novas parcelas. Um envio diferente para a mesma fatura é rejeitado. O pagamento parcial, a saída de caixa e as parcelas futuras são gravados juntos.
 
 ## Limites desta etapa
