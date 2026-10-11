@@ -5,7 +5,14 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 
-from app.finance.card_models import CardInstallment, CardPurchase, CreditCard, Invoice
+from app.finance.card_models import (
+    CardInstallment,
+    CardPurchase,
+    CreditCard,
+    FinancingInstallment,
+    Invoice,
+    InvoiceFinancing,
+)
 from app.finance.categories import category_or_404, subcategory_or_404
 from app.finance.cycles import cycle_for_due_month, first_cycle, shift_month, split_cents
 from app.finance.models import Movement
@@ -110,8 +117,59 @@ def serialize_installment(row, purchase, invoice, card):
     }
 
 
+def financing_installment_rows(db, invoice_id):
+    return db.execute(
+        select(FinancingInstallment, InvoiceFinancing)
+        .join(InvoiceFinancing, FinancingInstallment.financing_id == InvoiceFinancing.id)
+        .where(FinancingInstallment.invoice_id == invoice_id)
+        .order_by(FinancingInstallment.id)
+    ).all()
+
+
+def invoice_total(db, invoice_id):
+    purchases = (
+        db.scalar(
+            select(func.sum(CardInstallment.amount_cents)).where(
+                CardInstallment.invoice_id == invoice_id
+            )
+        )
+        or 0
+    )
+    financed = (
+        db.scalar(
+            select(func.sum(FinancingInstallment.amount_cents)).where(
+                FinancingInstallment.invoice_id == invoice_id
+            )
+        )
+        or 0
+    )
+    return purchases + financed
+
+
+def serialize_financing_installment(row, financing, invoice, card):
+    return {
+        "id": row.id,
+        "financing_id": financing.id,
+        "source_invoice_id": financing.source_invoice_id,
+        "invoice_id": invoice.id,
+        "invoice_month": invoice.month,
+        "invoice_paid": invoice.paid_on is not None,
+        "card_id": card.id,
+        "card_name": card.name,
+        "sequence": row.sequence,
+        "total_count": financing.installment_count,
+        "principal_cents": row.principal_cents,
+        "fee_cents": row.fee_cents,
+        "amount_cents": row.amount_cents,
+    }
+
+
 def serialize_invoice(db, invoice, card, current):
     installments = installment_rows(db, invoice.id)
+    financed_rows = financing_installment_rows(db, invoice.id)
+    financing = db.scalar(
+        select(InvoiceFinancing).where(InvoiceFinancing.source_invoice_id == invoice.id)
+    )
     return {
         "id": invoice.id,
         "card_id": card.id,
@@ -120,13 +178,33 @@ def serialize_invoice(db, invoice, card, current):
         "closes_on": invoice.closes_on,
         "due_on": invoice.due_on,
         "paid_on": invoice.paid_on,
-        "status": "paid"
+        "status": "refinanced"
+        if financing
+        else "paid"
         if invoice.paid_on
         else ("open" if current <= invoice.closes_on else "closed"),
-        "total_cents": sum(item.amount_cents for item, _ in installments),
+        "purchase_total_cents": sum(item.amount_cents for item, _ in installments),
+        "financed_total_cents": sum(item.amount_cents for item, _ in financed_rows),
+        "total_cents": (
+            sum(item.amount_cents for item, _ in installments)
+            + sum(item.amount_cents for item, _ in financed_rows)
+        ),
         "installments": [
             serialize_installment(item, purchase, invoice, card) for item, purchase in installments
         ],
+        "financing_installments": [
+            serialize_financing_installment(item, source, invoice, card)
+            for item, source in financed_rows
+        ],
+        "financing": None
+        if financing is None
+        else {
+            "id": financing.id,
+            "paid_cents": financing.paid_cents,
+            "principal_cents": financing.principal_cents,
+            "fee_cents": financing.fee_cents,
+            "installment_count": financing.installment_count,
+        },
     }
 
 
@@ -343,14 +421,7 @@ def pay_invoice(
     if account.kind != "bank":
         raise HTTPException(422, "Pague a fatura por uma conta bancária.")
     require_after_opening(account, current)
-    total = (
-        db.scalar(
-            select(func.sum(CardInstallment.amount_cents)).where(
-                CardInstallment.invoice_id == invoice.id
-            )
-        )
-        or 0
-    )
+    total = invoice_total(db, invoice.id)
     if total == 0:
         raise HTTPException(422, "Esta fatura não tem parcelas.")
     movement = Movement(

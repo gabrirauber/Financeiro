@@ -11,7 +11,14 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.config import Settings
-from app.finance.card_models import CardInstallment, CardPurchase, CreditCard, Invoice
+from app.finance.card_models import (
+    CardInstallment,
+    CardPurchase,
+    CreditCard,
+    FinancingInstallment,
+    Invoice,
+    InvoiceFinancing,
+)
 from app.finance.models import Account, Expense, Movement
 from app.identity.models import (
     Invite,
@@ -36,6 +43,8 @@ def client(monkeypatch):
     app = create_app(Settings(app_env="test"))
     with Session(app.state.engine) as db:
         for model in (
+            FinancingInstallment,
+            InvoiceFinancing,
             CardInstallment,
             CardPurchase,
             Invoice,
@@ -54,7 +63,23 @@ def client(monkeypatch):
             db.execute(delete(model))
         db.commit()
     with TestClient(app) as test_client:
-        yield test_client
+        try:
+            yield test_client
+        finally:
+            with Session(app.state.engine) as db:
+                for model in (
+                    FinancingInstallment,
+                    InvoiceFinancing,
+                    CardInstallment,
+                    CardPurchase,
+                    Invoice,
+                    CreditCard,
+                    Expense,
+                    Movement,
+                    Account,
+                ):
+                    db.execute(delete(model))
+                db.commit()
 
 
 def setup(client, email="owner@example.com", name="Casa"):

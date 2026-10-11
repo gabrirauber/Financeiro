@@ -87,3 +87,48 @@ class CardInstallment(Base):
     category_id: Mapped[UUID] = mapped_column(ForeignKey("categories.id"))
     subcategory_id: Mapped[UUID] = mapped_column(ForeignKey("subcategories.id"))
     note: Mapped[str] = mapped_column(String(200), default="")
+
+
+class InvoiceFinancing(Base):
+    __tablename__ = "invoice_financings"
+    __table_args__ = (
+        CheckConstraint("paid_cents > 0", name="financing_paid_positive"),
+        CheckConstraint("principal_cents > 0", name="financing_principal_positive"),
+        CheckConstraint("fee_cents >= 0", name="financing_fee_nonnegative"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    source_invoice_id: Mapped[UUID] = mapped_column(
+        ForeignKey("invoices.id", ondelete="CASCADE"), unique=True
+    )
+    paid_cents: Mapped[int] = mapped_column(Integer)
+    principal_cents: Mapped[int] = mapped_column(Integer)
+    fee_cents: Mapped[int] = mapped_column(Integer)
+    installment_count: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class FinancingInstallment(Base):
+    __tablename__ = "financing_installments"
+    __table_args__ = (
+        UniqueConstraint("financing_id", "sequence", name="uq_financing_sequence"),
+        CheckConstraint("amount_cents > 0", name="financing_installment_positive"),
+        CheckConstraint("principal_cents >= 0", name="financing_part_principal"),
+        CheckConstraint("fee_cents >= 0", name="financing_part_fee"),
+        CheckConstraint(
+            "amount_cents = principal_cents + fee_cents",
+            name="financing_installment_parts",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    financing_id: Mapped[UUID] = mapped_column(
+        ForeignKey("invoice_financings.id", ondelete="CASCADE"), index=True
+    )
+    invoice_id: Mapped[UUID] = mapped_column(
+        ForeignKey("invoices.id", ondelete="CASCADE"), index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer)
+    principal_cents: Mapped[int] = mapped_column(Integer)
+    fee_cents: Mapped[int] = mapped_column(Integer)
+    amount_cents: Mapped[int] = mapped_column(Integer)
