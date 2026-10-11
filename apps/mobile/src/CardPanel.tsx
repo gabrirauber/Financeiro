@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Switch, Text, TextInput, View } from 'react-native';
 import { request, Workspace } from './api';
-import { Account, CreditCard, Invoice, dateToDisplay, monthIso } from './finance';
-import { money, parseCents } from './prototype';
+import { Account, Category, CreditCard, Invoice, dateToDisplay, dateToIso, monthIso } from './finance';
+import { localDate, money, parseCents } from './prototype';
 import { Button, Card, Chip, palette } from './ui';
 
 const input = { backgroundColor: 'white', borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink };
@@ -16,9 +16,17 @@ export function CardPanel({ workspace, token, refresh }: {
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [selected, setSelected] = useState<string>();
   const [payAccount, setPayAccount] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [editingCard, setEditingCard] = useState<string>();
+  const [legacyCard, setLegacyCard] = useState<string>();
+  const [legacyAmount, setLegacyAmount] = useState('');
+  const [legacyCount, setLegacyCount] = useState('');
+  const [legacyCategory, setLegacyCategory] = useState('');
+  const [legacySubcategory, setLegacySubcategory] = useState('');
+  const [legacyNote, setLegacyNote] = useState('');
   const [name, setName] = useState('');
   const [closing, setClosing] = useState('');
   const [due, setDue] = useState('');
@@ -30,12 +38,13 @@ export function CardPanel({ workspace, token, refresh }: {
   const [remainingAmount, setRemainingAmount] = useState('');
   const [remainingNote, setRemainingNote] = useState('');
   async function load() {
-    const [allCards, allInvoices, allAccounts] = await Promise.all([
+    const [allCards, allInvoices, allAccounts, allCategories] = await Promise.all([
       request<CreditCard[]>(`${root}/cards`, token),
       request<Invoice[]>(`${root}/invoices`, token),
       request<Account[]>(`${root}/accounts`, token),
+      request<Category[]>(`${root}/categories`, token),
     ]);
-    setCards(allCards); setInvoices(allInvoices); setAccounts(allAccounts);
+    setCards(allCards); setInvoices(allInvoices); setAccounts(allAccounts); setCategories(allCategories);
     setPayAccount(current => current || allAccounts.find(a => a.kind === 'bank')?.id || '');
   }
   useEffect(() => { void load().catch(e => setError(e instanceof Error ? e.message : 'Não foi possível carregar os cartões.')); }, [root, token]);
@@ -47,14 +56,54 @@ export function CardPanel({ workspace, token, refresh }: {
     }
     setBusy(true); setError('');
     try {
-      await request(`${root}/cards`, token, 'POST', {
+      await request(`${root}/cards${editingCard ? '/' + editingCard : ''}`, token, editingCard ? 'PATCH' : 'POST', {
         name: name.trim(), closing_day: closeNumber, due_day: dueNumber,
         closing_day_next_bill: nextBill,
       });
-      setShowCreate(false); setName(''); setClosing(''); setDue(''); setNextBill(false);
-      setNotice('Cartão cadastrado. Você já pode lançar compras no crédito pelo +.');
+      setShowCreate(false); setEditingCard(undefined); setName(''); setClosing(''); setDue(''); setNextBill(false);
+      setNotice(editingCard ? 'Cartão atualizado. As faturas já criadas mantêm as datas anteriores.' :
+        'Cartão cadastrado. Você já pode lançar compras no crédito pelo +.');
       await load(); refresh();
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível cadastrar o cartão.'); }
+    finally { setBusy(false); }
+  }
+  function startEditCard(card: CreditCard) {
+    setEditingCard(card.id); setShowCreate(true); setLegacyCard(undefined);
+    setName(card.name); setClosing(String(card.closing_day)); setDue(String(card.due_day));
+    setNextBill(card.closing_day_next_bill); setError('');
+  }
+  function cancelCardForm() {
+    setShowCreate(false); setEditingCard(undefined);
+    setName(''); setClosing(''); setDue(''); setNextBill(false); setError('');
+  }
+  function startLegacy(card: CreditCard) {
+    setLegacyCard(card.id); cancelCardForm();
+    setLegacyAmount(''); setLegacyCount(''); setLegacyCategory(''); setLegacySubcategory('');
+    setLegacyNote(''); setError('');
+  }
+  async function saveLegacy() {
+    const cents = parseCents(legacyAmount);
+    const count = Number(legacyCount);
+    const category = categories.find(item => item.id === legacyCategory && item.active);
+    const sub = category?.subcategories.find(item => item.id === legacySubcategory && item.active);
+    if (!cents) return setError('Informe o valor de cada parcela em reais.');
+    if (!Number.isInteger(count) || count < 1 || count > 120)
+      return setError('Informe de 1 a 120 parcelas restantes.');
+    if (!category || !sub) return setError('Escolha categoria e subcategoria.');
+    if (cents * count > 999999999) return setError('O valor total excede o permitido.');
+    setBusy(true); setError('');
+    try {
+      await request(`${root}/card-purchases`, token, 'POST', {
+        card_id: legacyCard, category_id: category.id, subcategory_id: sub.id,
+        purchased_on: dateToIso(localDate()), total_cents: cents * count,
+        installment_count: count, legacy: true,
+        first_bill_month: `${monthIso(new Date())}-01`, first_sequence: 1,
+        note: legacyNote.trim(),
+      });
+      setLegacyCard(undefined);
+      setNotice(`${count} ${count === 1 ? 'parcela lançada' : 'parcelas lançadas'} a partir da fatura atual.`);
+      await load(); refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível lançar as parcelas antigas.'); }
     finally { setBusy(false); }
   }
   async function pay(invoice: Invoice) {
@@ -94,6 +143,22 @@ export function CardPanel({ workspace, token, refresh }: {
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível corrigir as parcelas.'); }
     finally { setBusy(false); }
   }
+  const cardForm = <Card>
+        <Text style={label}>{editingCard ? 'Editar cartão' : 'Novo cartão'}</Text>
+        {editingCard && <Text style={muted}>As faturas já criadas manterão suas datas. Novas compras usarão os dias atualizados.</Text>}
+        <Text style={label}>Nome do cartão *</Text>
+        <TextInput accessibilityLabel="Nome do cartão" style={input} value={name} onChangeText={setName} placeholder="Ex.: Cartão principal" />
+        <Text style={label}>Dia de fechamento *</Text>
+        <TextInput accessibilityLabel="Dia de fechamento" style={input} value={closing} onChangeText={setClosing} keyboardType="number-pad" maxLength={2} placeholder="10" />
+        <Text style={label}>Dia de vencimento *</Text>
+        <TextInput accessibilityLabel="Dia de vencimento" style={input} value={due} onChangeText={setDue} keyboardType="number-pad" maxLength={2} placeholder="20" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Switch accessibilityLabel="Compra no fechamento vai para a próxima fatura" value={nextBill} onValueChange={setNextBill} />
+          <Text style={[muted, { flex: 1 }]}>Compra no dia do fechamento entra na próxima fatura</Text>
+        </View>
+        <Button label={busy ? 'Salvando…' : editingCard ? 'Salvar alterações' : 'Salvar cartão'} onPress={() => { if (!busy) void create(); }} />
+      <Button label="Cancelar" secondary onPress={cancelCardForm} />
+    </Card>;
   return <View style={{ gap: 16 }}>
     <Text style={{ fontSize: 28, fontWeight: '700', color: palette.ink }}>Seus cartões</Text>
     <Text style={muted}>Compras por fatura. O saldo da conta muda quando a fatura é paga.</Text>
@@ -134,24 +199,39 @@ export function CardPanel({ workspace, token, refresh }: {
           onPress={() => { if (!busy) void pay(current); }} />
       </Card>}
     </> : <>
-      <Button label={showCreate ? 'Cancelar cadastro' : 'Cadastrar cartão'}
-        secondary onPress={() => { setShowCreate(!showCreate); setError(''); }} />
-      {showCreate && <Card>
-        <Text style={label}>Nome do cartão *</Text>
-        <TextInput accessibilityLabel="Nome do cartão" style={input} value={name} onChangeText={setName} placeholder="Ex.: Cartão principal" />
-        <Text style={label}>Dia de fechamento *</Text>
-        <TextInput accessibilityLabel="Dia de fechamento" style={input} value={closing} onChangeText={setClosing} keyboardType="number-pad" maxLength={2} placeholder="10" />
-        <Text style={label}>Dia de vencimento *</Text>
-        <TextInput accessibilityLabel="Dia de vencimento" style={input} value={due} onChangeText={setDue} keyboardType="number-pad" maxLength={2} placeholder="20" />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <Switch accessibilityLabel="Compra no fechamento vai para a próxima fatura" value={nextBill} onValueChange={setNextBill} />
-          <Text style={[muted, { flex: 1 }]}>Compra no dia do fechamento entra na próxima fatura</Text>
-        </View>
-        <Button label={busy ? 'Salvando…' : 'Salvar cartão'} onPress={() => { if (!busy) void create(); }} />
-      </Card>}
+      {!editingCard && <Button label={showCreate ? 'Cancelar' : 'Cadastrar cartão'}
+        secondary onPress={() => { if (showCreate) cancelCardForm(); else { cancelCardForm(); setShowCreate(true); setLegacyCard(undefined); } }} />}
+      {showCreate && !editingCard && cardForm}
       {cards.map(card => <Card key={card.id}>
         <Text style={{ fontSize: 20, fontWeight: '700', color: palette.ink }}>{card.name}</Text>
         <Text style={muted}>Fecha dia {card.closing_day} · vence dia {card.due_day}</Text>
+        <Button label="Editar cartão" secondary onPress={() => startEditCard(card)} />
+        {editingCard === card.id && cardForm}
+        <Button label="Lançar parcelas antigas" secondary onPress={() => startLegacy(card)} />
+        {legacyCard === card.id && <Card>
+          <Text style={label}>Parcelas antigas · {card.name}</Text>
+          <Text style={muted}>Informe o valor de cada parcela e quantas faltam. A primeira entra na fatura de {monthIso(new Date()).split('-').reverse().join('/')}.</Text>
+          <Text style={label}>Valor de cada parcela *</Text>
+          <TextInput accessibilityLabel="Valor de cada parcela antiga" style={input} value={legacyAmount}
+            onChangeText={setLegacyAmount} keyboardType="decimal-pad" placeholder="200,00" />
+          <Text style={label}>Quantidade de parcelas restantes *</Text>
+          <TextInput accessibilityLabel="Quantidade de parcelas restantes" style={input} value={legacyCount}
+            onChangeText={setLegacyCount} keyboardType="number-pad" maxLength={3} />
+          <Text style={label}>Categoria *</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{categories.filter(item => item.active).map(item =>
+            <Chip key={item.id} label={item.name} selected={legacyCategory === item.id}
+              onPress={() => { setLegacyCategory(item.id); setLegacySubcategory(''); }} />)}</View>
+          <Text style={label}>Subcategoria *</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{categories.find(item => item.id === legacyCategory)
+            ?.subcategories.filter(item => item.active).map(item =>
+              <Chip key={item.id} label={item.name} selected={legacySubcategory === item.id}
+                onPress={() => setLegacySubcategory(item.id)} />)}</View>
+          <Text style={label}>Observação (opcional)</Text>
+          <TextInput accessibilityLabel="Observação da compra antiga" style={input} value={legacyNote}
+            onChangeText={setLegacyNote} maxLength={200} placeholder="Ex.: Compra antiga" />
+          <Button label={busy ? 'Salvando…' : 'Lançar parcelas'} onPress={() => { if (!busy) void saveLegacy(); }} />
+          <Button label="Cancelar" secondary onPress={() => setLegacyCard(undefined)} />
+        </Card>}
         {invoices.filter(i => i.card_id === card.id).length ? invoices.filter(i => i.card_id === card.id).map(invoice =>
           <Button key={invoice.id} secondary
             label={`${invoice.month.slice(0, 7).split('-').reverse().join('/')} · ${money(invoice.total_cents)} · ${invoice.status === 'paid' ? 'Paga' : invoice.status === 'open' ? 'Aberta' : 'Fechada'}`}

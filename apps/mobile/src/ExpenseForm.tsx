@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View, Switch } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Account, Category, Expense, ExpenseInput, Subcategory, CreditCard, CardPurchaseInput, dateToDisplay, dateToIso, paymentLabel } from './finance';
 import { localDate, parseCents, validDate } from './prototype';
 import { CategoryCreator } from './CategoryCreator';
@@ -25,9 +25,7 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
   const [note, setNote] = useState(initial?.note || '');
   const [cardId, setCardId] = useState(cards[0]?.id || '');
   const [count, setCount] = useState('1');
-  const [legacy, setLegacy] = useState(false);
   const [firstBill, setFirstBill] = useState('');
-  const [firstSequence, setFirstSequence] = useState('1');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => { setError(''); }, [amount, category, subcategory, date, payment, source, note]);
@@ -45,10 +43,6 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
       if (!cards.some(item => item.id === cardId)) return setError('Cadastre e escolha um cartão na aba Cartões.');
       if (!Number.isInteger(Number(count)) || Number(count) < 1 || Number(count) > 120) return setError('Informe de 1 a 120 parcelas.');
       if (firstBill && !/^(0[1-9]|1[0-2])\/\d{4}$/.test(firstBill)) return setError('Informe a primeira fatura no formato MM/AAAA.');
-      if (legacy && (!firstBill ||
-        !Number.isInteger(Number(firstSequence)) || Number(firstSequence) < 1)) {
-        return setError('Informe o primeiro mês da fatura e o número da primeira parcela restante.');
-      }
     } else if (!options.some(item => item.id === source)) return setError('Escolha uma conta de saída.');
     setBusy(true); setError('');
     try {
@@ -57,10 +51,9 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
         await onCreditSave({
           card_id: cardId, category_id: category, subcategory_id: subcategory,
           purchased_on: dateToIso(date), total_cents: cents,
-          installment_count: Number(count), note: note.trim(), legacy,
+          installment_count: Number(count), note: note.trim(), legacy: false,
           ...(firstBill ? {
             first_bill_month: `${billYear}-${billMonth}-01`,
-            ...(legacy ? { first_sequence: Number(firstSequence) } : {}),
           } : {}),
         });
       } else await onSave({
@@ -100,16 +93,10 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
           <Text style={s.hint}>Cadastre um cartão na aba Cartões.</Text>}</View>
         <Text style={s.label}>Parcelas *</Text>
         <TextInput accessibilityLabel="Número de parcelas" style={s.input} value={count} onChangeText={setCount} keyboardType="number-pad" maxLength={3} />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <Switch accessibilityLabel="Lançar parcelas restantes de compra antiga" value={legacy} onValueChange={setLegacy} />
-          <Text style={[s.hint, { flex: 1 }]}>Lançar somente parcelas restantes de compra antiga</Text>
-        </View>
-        <Text style={s.label}>{legacy ? 'Primeira fatura restante (MM/AAAA) *' : 'Primeira fatura (MM/AAAA, opcional)'}</Text>
-          <TextInput accessibilityLabel="Primeira fatura" style={s.input} value={firstBill} onChangeText={setFirstBill} placeholder="MM/AAAA" keyboardType="numbers-and-punctuation" maxLength={7} />
-        {legacy && <>
-          <Text style={s.label}>Número da primeira parcela restante *</Text>
-          <TextInput accessibilityLabel="Número da primeira parcela restante" style={s.input} value={firstSequence} onChangeText={setFirstSequence} keyboardType="number-pad" maxLength={3} />
-        </>}
+        <Text style={s.label}>Primeira fatura (MM/AAAA, opcional)</Text>
+        <TextInput accessibilityLabel="Primeira fatura" style={s.input} value={firstBill}
+          onChangeText={setFirstBill} placeholder="MM/AAAA"
+          keyboardType="numbers-and-punctuation" maxLength={7} />
       </> : <>
         <Text style={s.label}>Conta de saída *</Text>
         <View style={s.wrap}>{options.length ? options.map(item => <Chip key={item.id} label={item.name} selected={source === item.id} onPress={() => setSource(item.id)} />) : <Text style={s.hint}>Cadastre uma conta {payment === 'cash' ? 'dinheiro' : 'bancária'} na aba Contas.</Text>}</View>
