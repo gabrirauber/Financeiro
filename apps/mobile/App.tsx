@@ -11,6 +11,7 @@ import { AccountsPanel } from './src/AccountsPanel';
 import { CardPanel } from './src/CardPanel';
 import { PlanningPanel } from './src/PlanningPanel';
 import { IncomeReminder } from './src/IncomeReminder';
+import { ProjectionPanel } from './src/ProjectionPanel';
 import { request, Workspace } from './src/api';
 import { Account, Category, Expense, ExpenseInput, Subcategory, CreditCard, CardInstallment, CardPurchaseInput, FinancingInstallment, dateToDisplay, monthIso, paymentLabel } from './src/finance';
 import { Button, Card, palette } from './src/ui';
@@ -161,10 +162,11 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
     <StatusBar style="dark" />
     <View style={s.shell}>
       <View style={s.header}><View><Text style={s.brand}>financeiro<Text style={{ color: '#A9B883' }}>.</Text></Text><Text style={s.small}>Seu dinheiro, com clareza.</Text></View><View style={s.avatar}><Text style={s.avatarText}>F</Text></View></View>
-      <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>E08 · PLANEJAMENTO MENSAL</Text></View>
+      <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>E09 · SAÚDE FINANCEIRA</Text></View>
       <ScrollView contentContainerStyle={s.content}>
         {tab === 'Resumo' ? <>
           <View style={s.month}><Pressable accessibilityRole="button" accessibilityLabel="Mês anterior" onPress={() => { setMonth(value => new Date(value.getFullYear(), value.getMonth() - 1, 1)); setNotice(''); }} style={s.arrow}><Text style={s.arrowText}>‹</Text></Pressable><Text style={s.monthText}>{monthTitle}</Text><Pressable accessibilityRole="button" accessibilityLabel="Próximo mês" onPress={() => { setMonth(value => new Date(value.getFullYear(), value.getMonth() + 1, 1)); setNotice(''); }} style={s.arrow}><Text style={s.arrowText}>›</Text></Pressable></View>
+          <ProjectionPanel workspace={workspace} token={token} period={period} refresh={refresh} />
           {loading && <Text style={s.small}>Carregando gastos…</Text>}
           <View style={s.hero}><Text style={s.heroLabel}>GASTOS E COMPROMISSOS DO MÊS</Text><Text style={s.heroValue}>{money(total)}</Text><View style={s.heroDivider} /><Text style={s.heroCaption}>Compras e despesas, incluindo fixas pendentes: {money(consumptionTotal)} · Faturas parceladas: {money(financedTotal)}</Text><Text style={s.heroFoot}>Despesa fixa paga substitui a previsão pelo valor real. Compras no cartão ficam no mês da fatura; financiamento futuro não é nova compra.</Text></View>
           <View style={s.section}><Text style={s.sectionTitle}>{category ? category.name : 'Por categoria'}</Text><Text style={s.small}>{category ? 'Subcategorias' : 'Toque para explorar'}</Text></View>

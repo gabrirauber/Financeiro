@@ -119,7 +119,7 @@ export function AccessGate({ children }: { children: (workspace: Workspace, toke
   return <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 24, gap: 16, width: '100%', maxWidth: 560, alignSelf: 'center' }}>
       <Text style={{ fontSize: 30, fontWeight: '800', color: palette.ink }}>financeiro.</Text>
-      <Text style={{ color: palette.muted }}>E08 · planejamento mensal.</Text>
+      <Text style={{ color: palette.muted }}>E09 · saúde financeira.</Text>
       {busy ? <Text accessibilityLiveRegion="polite">Aguarde…</Text> : null}
       {!user ? <Card>
         <Text style={{ fontSize: 22, color: palette.ink }}>{register ? 'Crie seu acesso' : 'Boas-vindas'}</Text>

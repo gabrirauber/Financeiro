@@ -14,15 +14,19 @@ Exemplo: previsão de R$ 3.000, recebimento de R$ 2.800 marcado como concluído 
 
 ## DEC-02 — Refinanciamento e resultado mensal
 
+Aprovada pelo cliente em 12/10/2026: o resultado do mês original considera apenas o valor efetivamente pago da fatura; o principal refinanciado entra nas parcelas futuras. O gráfico mantém as compras no mês da fatura original.
+
 Afeta RF-17/18/23/24, E07/E09.
 
 Proposta: separar gráfico de compras/compromissos e resultado financeiro. No mês de origem, manter compras no gráfico; no resultado financeiro, retirar do compromisso daquele mês o principal transferido às faturas futuras, explicando o ajuste. Meses futuros incluem as parcelas financiadas, com principal e encargos discriminados.
 
 Exemplo sem outros gastos: renda R$ 1.500 e fatura R$ 1.000. Antes de refinanciar, resultado previsto R$ 500. Pagamento de R$ 600 e refinanciamento dos R$ 400 restantes mudam o resultado financeiro para R$ 900; gráfico original continua mostrando R$ 1.000 em compras. Duas parcelas de R$ 220 comprometem os dois meses seguintes. Com saldo atual de R$ 1.500 antes do pagamento, após a operação há R$ 900 em caixa; não descontar R$ 1.000 outra vez.
 
-Esta proposta refina a fórmula original da modelagem. Só atualizar a fórmula normativa após aprovação explícita.
+Esta regra refina a fórmula original da modelagem e foi aprovada para a E09.
 
 ## DEC-03 — Correções, parcelas e pendências antigas
+
+Decisão adicional E09 aprovada em 12/10/2026: despesas fixas e faturas antigas ainda não pagas reduzem o saldo final previsto atual e futuro, em linha separada. Não são lançadas novamente como gasto do mês corrente. As demais regras de correção seguem as decisões já registradas abaixo.
 
 Afeta RF-11/24/26/27, E04–E09.
 
