@@ -204,6 +204,14 @@ def delete_income(workspace_id: UUID, income_id: UUID, db: Db, user: CurrentUser
     if row is None or row.workspace_id != workspace_id or row.kind != "income":
         raise HTTPException(404, "Receita não encontrada.")
     require_current_month(workspace, row.occurred_on)
+    from app.finance.recurrence_models import IncomeOccurrence, IncomeReceipt
+
+    linked = db.scalar(select(IncomeReceipt).where(IncomeReceipt.movement_id == row.id))
+    if linked:
+        occurrence = db.get(IncomeOccurrence, linked.occurrence_id)
+        occurrence.completed = False
+        db.delete(linked)
+        db.flush()
     db.delete(row)
     db.commit()
 

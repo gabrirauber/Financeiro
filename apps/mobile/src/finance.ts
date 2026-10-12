@@ -10,6 +10,7 @@ export type Expense = {
   amount_cents: number; occurred_on: string;
   payment_method: 'pix' | 'debit' | 'cash' | 'credit'; note: string;
   card_name?: string; sequence?: number; total_count?: number; invoice_paid?: boolean;
+  forecast?: boolean;
 };
 export type ExpenseInput = Omit<Expense, 'id'>;
 export const dateToIso = (value: string) => value.split('/').reverse().join('-');

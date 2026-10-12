@@ -25,7 +25,7 @@ export function ApiStatus() {
           headers: { Accept: 'application/json' },
         });
         const body = await response.json();
-        const healthy = response.ok && body.status === 'ok' && body.database === 'ready' && body.stage === 'E07';
+        const healthy = response.ok && body.status === 'ok' && body.database === 'ready' && body.stage === 'E08';
         if (active) setState(healthy ? 'ready' : 'unavailable');
       } catch {
         if (active) setState('unavailable');
@@ -37,7 +37,7 @@ export function ApiStatus() {
 
   const messages: Record<State, { title: string; text: string }> = {
     checking: { title: 'Verificando conexão…', text: 'Consultando o servidor e o banco de dados.' },
-    ready: { title: 'Servidor conectado', text: 'Contas, faturas e pagamentos parciais salvos no servidor.' },
+    ready: { title: 'Servidor conectado', text: 'Contas, faturas e planejamento salvos no servidor.' },
     unavailable: { title: 'Não foi possível conectar', text: 'Verifique a internet ou tente novamente. Os saldos reais não podem ser consultados agora. Tente novamente.' },
     unconfigured: { title: 'Conexão ainda não configurada', text: 'Configure o endereço do servidor para consultar seus dados.' },
   };

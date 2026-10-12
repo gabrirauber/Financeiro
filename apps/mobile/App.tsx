@@ -9,11 +9,13 @@ import { ApiStatus } from './src/ApiStatus';
 import { AccessGate } from './src/AccessGate';
 import { AccountsPanel } from './src/AccountsPanel';
 import { CardPanel } from './src/CardPanel';
+import { PlanningPanel } from './src/PlanningPanel';
+import { IncomeReminder } from './src/IncomeReminder';
 import { request, Workspace } from './src/api';
 import { Account, Category, Expense, ExpenseInput, Subcategory, CreditCard, CardInstallment, CardPurchaseInput, FinancingInstallment, dateToDisplay, monthIso, paymentLabel } from './src/finance';
 import { Button, Card, palette } from './src/ui';
 
-type Tab = 'Resumo' | 'Contas' | 'Cartões';
+type Tab = 'Resumo' | 'Contas' | 'Cartões' | 'Planejamento';
 export default function App() {
   return <SafeAreaProvider><AccessGate>{(workspace, token) =>
     <Home key={workspace.id} workspace={workspace} token={token} />
@@ -56,7 +58,8 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
       request<CardInstallment[]>(`${root}/card-installments?month=${period}`, token),
       request<CreditCard[]>(`${root}/cards`, token),
       request<FinancingInstallment[]>(`${root}/invoice-financing-installments?month=${period}`, token),
-    ]).then(([cats, accs, rows, installments, cardRows, financedRows]) => {
+      request<{id:string;kind:'expense'|'card';description:string;due_on:string;amount_cents:number;category_id:string;subcategory_id:string;payment_method:'pix'|'debit'|'cash'|null;expense_id:string|null}[]>(`${root}/recurring-occurrences?month=${period}`, token),
+    ]).then(([cats, accs, rows, installments, cardRows, financedRows, recurring]) => {
       if (!active) return;
       setCategories(cats); setAccounts(accs); setCards(cardRows); setFinanced(financedRows);
       setExpenses([...rows, ...installments.map(item => ({
@@ -65,6 +68,11 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
         occurred_on: item.purchased_on, payment_method: 'credit' as const,
         note: item.note, card_name: item.card_name, sequence: item.sequence,
         total_count: item.total_count, invoice_paid: item.invoice_paid,
+      })), ...recurring.filter(item => item.kind === 'expense' && !item.expense_id).map(item => ({
+        id: item.id, account_id: '', category_id: item.category_id,
+        subcategory_id: item.subcategory_id, amount_cents: item.amount_cents,
+        occurred_on: item.due_on, payment_method: (item.payment_method || 'pix') as 'pix'|'debit'|'cash',
+        note: item.description, forecast: true,
       }))]); setError('');
     }).catch(e => { if (active) setError(e instanceof Error ? e.message : 'Não foi possível carregar o resumo.'); })
       .finally(() => { if (active) setLoading(false); });
@@ -153,7 +161,7 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
     <StatusBar style="dark" />
     <View style={s.shell}>
       <View style={s.header}><View><Text style={s.brand}>financeiro<Text style={{ color: '#A9B883' }}>.</Text></Text><Text style={s.small}>Seu dinheiro, com clareza.</Text></View><View style={s.avatar}><Text style={s.avatarText}>F</Text></View></View>
-      <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>E07 · PAGAMENTO PARCIAL</Text></View>
+      <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>E08 · PLANEJAMENTO MENSAL</Text></View>
       <ScrollView contentContainerStyle={s.content}>
         {tab === 'Resumo' ? <>
           <ApiStatus />
@@ -161,7 +169,7 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
           {!!notice && <Pressable accessibilityRole="button" accessibilityLabel="Dispensar confirmação" onPress={() => setNotice('')} style={s.notice}><Text accessibilityLiveRegion="polite" style={s.small}>{notice}</Text></Pressable>}
           {!!error && <Card><Text accessibilityRole="alert" style={{ color: '#AA422E' }}>{error}</Text><Button label="Tentar novamente" secondary onPress={() => setRefresh(value => value + 1)} /></Card>}
           {loading && <Text style={s.small}>Carregando gastos…</Text>}
-          <View style={s.hero}><Text style={s.heroLabel}>GASTOS E COMPROMISSOS DO MÊS</Text><Text style={s.heroValue}>{money(total)}</Text><View style={s.heroDivider} /><Text style={s.heroCaption}>Compras e despesas: {money(consumptionTotal)} · Faturas parceladas: {money(financedTotal)}</Text><Text style={s.heroFoot}>Compras originais ficam no mês da fatura. Parcelas financiadas aparecem nos meses futuros; seu principal não é novo consumo.</Text></View>
+          <View style={s.hero}><Text style={s.heroLabel}>GASTOS E COMPROMISSOS DO MÊS</Text><Text style={s.heroValue}>{money(total)}</Text><View style={s.heroDivider} /><Text style={s.heroCaption}>Compras e despesas, incluindo fixas pendentes: {money(consumptionTotal)} · Faturas parceladas: {money(financedTotal)}</Text><Text style={s.heroFoot}>Despesa fixa paga substitui a previsão pelo valor real. Compras no cartão ficam no mês da fatura; financiamento futuro não é nova compra.</Text></View>
           <View style={s.section}><Text style={s.sectionTitle}>{category ? category.name : 'Por categoria'}</Text><Text style={s.small}>{category ? 'Subcategorias' : 'Toque para explorar'}</Text></View>
           <Button label="Gerenciar categorias e subcategorias" secondary onPress={() => setManageCategories(true)} />
           <Card>
@@ -189,8 +197,9 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={s.itemTitle}>{item.note || sub?.name || 'Despesa'}</Text>
                 <Text style={s.small}>{cat?.name || 'Categoria'} · {sub?.name || 'Subcategoria'} · {dateToDisplay(item.occurred_on)}</Text>
-                <Text style={s.small}>{paymentLabel[item.payment_method]} · {item.payment_method === 'credit' ? `${item.card_name} · ${item.sequence}/${item.total_count}` : acc?.name || 'Conta'}</Text>
-                {item.payment_method !== 'credit' && item.occurred_on.slice(0, 7) === currentMonth && <View style={{ flexDirection: 'row', gap: 16 }}>
+                <Text style={s.small}>{item.forecast ? 'Prevista · ainda não paga' : paymentLabel[item.payment_method]} · {item.payment_method === 'credit' ? `${item.card_name} · ${item.sequence}/${item.total_count}` : item.forecast ? 'Conta a escolher no pagamento' : acc?.name || 'Conta'}</Text>
+                {item.forecast && <Text accessibilityRole="button" onPress={() => setTab('Planejamento')} style={{color:palette.green}}>Registrar pagamento no Planejamento</Text>}
+                {!item.forecast && item.payment_method !== 'credit' && item.occurred_on.slice(0, 7) === currentMonth && <View style={{ flexDirection: 'row', gap: 16 }}>
                   <Text accessibilityRole="button" onPress={() => { setEditing(item); setForm(true); }} style={{ color: palette.green }}>Editar</Text>
                   <Text accessibilityRole="button" onPress={() => confirmAction('Excluir despesa?', () => removeExpense(item))} style={{ color: '#AA422E' }}>Excluir</Text>
                 </View>}
@@ -208,12 +217,12 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
               </View><Text style={s.itemValue}>{money(item.amount_cents)}</Text>
             </View>)}</Card>
           </>}
-        </> : tab === 'Contas' ? <AccountsPanel workspace={workspace} token={token} /> : <>
+        </> : tab === 'Contas' ? <AccountsPanel workspace={workspace} token={token} /> : tab === 'Cartões' ? <>
           <CardPanel workspace={workspace} token={token} refresh={() => setRefresh(value => value + 1)} />
-        </>}
+        </> : <PlanningPanel workspace={workspace} token={token} period={period} refresh={refresh} onChanged={() => setRefresh(value => value + 1)} />}
       </ScrollView>
       <Pressable accessibilityRole="button" accessibilityLabel="Adicionar despesa" onPress={() => { void openNewExpense(); }} style={({ pressed }) => [s.fab, pressed && { opacity: 0.8 }]}><Text style={s.fabText}>+</Text></Pressable>
-      <View style={s.nav}>{(['Resumo', 'Contas', 'Cartões'] as Tab[]).map((item, index) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => { setTab(item); setDetail(null); if (item === 'Resumo') setRefresh(value => value + 1); }} style={s.navItem}><View style={[s.navIcon, tab === item && s.navActive]}><Text style={[s.navSymbol, tab === item && { color: palette.green }]}>{['▥', '▤', '▱'][index]}</Text></View><Text style={[s.navLabel, tab === item && { color: palette.green, fontWeight: '700' }]}>{item}</Text></Pressable>)}</View>
+      <View style={s.nav}>{(['Resumo', 'Contas', 'Cartões', 'Planejamento'] as Tab[]).map((item, index) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => { setTab(item); setDetail(null); if (item === 'Resumo') setRefresh(value => value + 1); }} style={s.navItem}><View style={[s.navIcon, tab === item && s.navActive]}><Text style={[s.navSymbol, tab === item && { color: palette.green }]}>{['▥', '▤', '▱', '◷'][index]}</Text></View><Text style={[s.navLabel, tab === item && { color: palette.green, fontWeight: '700' }]}>{item}</Text></Pressable>)}</View>
     </View>
     {form && <Modal visible animationType="slide" onRequestClose={() => setForm(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ExpenseForm key={editing?.id || 'new'} initial={editing} categories={categories} accounts={accounts} cards={cards} onCreditSave={saveCredit} onCategory={addCategory} onSubcategory={addSubcategory} onSave={saveExpense} onCancel={() => { setForm(false); setEditing(undefined); }} /></View></SafeAreaView></Modal>}
     {manageCategories && <Modal visible animationType="slide" onRequestClose={() => setManageCategories(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
@@ -236,6 +245,7 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
         <Card key={item.id}><CategoryActionRow label={item.name} action="Reativar" inactive
           onAction={() => { void restoreCategory(item).catch(e => setError(e instanceof Error ? e.message : 'Não foi possível reativar.')); }} /></Card>)}
     </ScrollView></View></SafeAreaView></Modal>}
+    <IncomeReminder workspace={workspace} token={token} refresh={refresh} onChanged={() => setRefresh(value => value + 1)} />
   </SafeAreaView>;
 }
 

@@ -150,6 +150,14 @@ def delete_expense(workspace_id: UUID, expense_id: UUID, db: Db, user: CurrentUs
     expense = expense_or_404(db, workspace_id, expense_id)
     movement = db.get(Movement, expense.movement_id)
     require_current_month(workspace, movement.occurred_on)
+    from app.finance.recurrence_models import RecurringOccurrence
+
+    occurrence = db.scalar(
+        select(RecurringOccurrence).where(RecurringOccurrence.expense_id == expense.id)
+    )
+    if occurrence:
+        occurrence.expense_id = None
+        db.flush()
     db.delete(expense)
     db.delete(movement)
     db.commit()

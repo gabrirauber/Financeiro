@@ -1,6 +1,8 @@
-# Financeiro API — E07
+# Financeiro API — E08
 
 Python 3.13, FastAPI, SQLAlchemy, PostgreSQL e Alembic. A API mantém usuários, espaços compartilhados, contas, receitas, transferências, categorias, subcategorias, despesas pagas, cartões, parcelas, faturas, antecipações e pagamentos parciais.
+
+Na E08, também mantém despesas fixas, assinaturas no cartão, rendas previstas e recebimentos vinculados. A rotina mensal roda no servidor ao iniciar e depois a cada hora; também pode ser executada manualmente com `.venv/Scripts/python.exe -m app.finance.run_recurring`. Todas as ocorrências têm chaves únicas por regra e mês para evitar duplicidade. A rotina depende de o serviço da API permanecer ativo; um agendamento externo pode usar o mesmo comando em uma futura configuração de hospedagem.
 
 ## Desenvolvimento local
 

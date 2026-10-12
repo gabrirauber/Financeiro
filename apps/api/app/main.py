@@ -1,5 +1,6 @@
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import Literal
 
 from fastapi import FastAPI, Response
@@ -11,8 +12,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Settings
 from app.database import build_engine, database_ready
-from app.finance import advances, cards, categories, expenses, financing
+from app.finance import advances, cards, categories, expenses, financing, income_plans, recurrences
 from app.finance import routes as finance
+from app.finance.run_recurring import run as run_recurring
 from app.identity import auth, invites, recovery, workspaces
 from app.validation import validation_message
 
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 class HealthResponse(BaseModel):
     status: Literal["ok", "unavailable"]
     database: Literal["ready", "unavailable"]
-    stage: Literal["E07"] = "E07"
+    stage: Literal["E08"] = "E08"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -31,12 +33,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app):
-        yield
-        engine.dispose()
+        async def schedule_recurrences():
+            while True:
+                try:
+                    await asyncio.to_thread(run_recurring, engine)
+                except SQLAlchemyError:
+                    logger.warning("Não foi possível gerar as ocorrências mensais")
+                await asyncio.sleep(3600)
+
+        task = asyncio.create_task(schedule_recurrences()) if settings.app_env != "test" else None
+        try:
+            yield
+        finally:
+            if task:
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+            engine.dispose()
 
     app = FastAPI(
         title="Financeiro API",
-        version="0.7.0",
+        version="0.8.0",
         lifespan=lifespan,
         docs_url="/docs" if settings.app_env != "production" else None,
         redoc_url=None,
@@ -61,6 +78,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(cards.router)
     app.include_router(financing.router)
     app.include_router(advances.router)
+    app.include_router(recurrences.router)
+    app.include_router(income_plans.router)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -80,7 +99,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health/live")
     def live():
-        return {"status": "ok", "stage": "E07"}
+        return {"status": "ok", "stage": "E08"}
 
     @app.get("/health/ready", response_model=HealthResponse)
     def ready(response: Response):

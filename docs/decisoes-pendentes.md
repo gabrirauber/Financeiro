@@ -4,6 +4,8 @@ Data: 07/10/2026. As propostas abaixo aguardam resposta/revisão do cliente. Nã
 
 ## DEC-01 — Renda prevista e recebimento diferente
 
+Aprovada pelo cliente em 12/10/2026: em cada recebimento vinculado, escolher entre concluir a previsão ou manter a diferença pendente.
+
 Afeta RF-21/22/23/24, E08/E09.
 
 Proposta: renda considerada = receitas recebidas no mês + valores ainda esperados das previsões do mês, sem duplicar recebimentos vinculados. Receita extra aumenta a renda considerada. Ao lançar recebimento de uma previsão, indicar se encerra a previsão ou se ainda falta receber; lançamento sempre entra imediatamente no saldo.
