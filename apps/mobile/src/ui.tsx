@@ -2,8 +2,8 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 export const palette = { bg: '#F6F5F0', ink: '#20362F', muted: '#66766E', green: '#285B49', line: '#E0E5DD', white: '#FFFFFF' };
-export function Button({ label, onPress, secondary = false }: { label: string; onPress: () => void; secondary?: boolean }) {
-  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.button, secondary && styles.secondary, pressed && { opacity: 0.7 }]}>
+export function Button({ label, onPress, secondary = false, disabled = false }: { label: string; onPress: () => void; secondary?: boolean; disabled?: boolean }) {
+  return <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.button, secondary && styles.secondary, disabled && { opacity: 0.5 }, pressed && { opacity: 0.7 }]}>
     <Text style={[styles.buttonText, secondary && { color: palette.green }]}>{label}</Text>
   </Pressable>;
 }
