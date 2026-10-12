@@ -246,9 +246,17 @@ def edit_rule(workspace_id: UUID, rule_id: UUID, data: RuleInput, db: Db, user: 
 
 @router.delete("/recurring-rules/{rule_id}", status_code=204)
 def deactivate_rule(workspace_id: UUID, rule_id: UUID, db: Db, user: CurrentUser):
-    require_member(db, workspace_id, user.id, lock=True)
+    workspace, _ = require_member(db, workspace_id, user.id, lock=True)
     row = rule_or_404(db, workspace_id, rule_id)
     row.active = False
+    future = db.scalars(select(RecurringOccurrence).where(
+        RecurringOccurrence.rule_id == row.id,
+        RecurringOccurrence.month > today(workspace).replace(day=1),
+        RecurringOccurrence.expense_id.is_(None),
+        RecurringOccurrence.purchase_id.is_(None),
+    )).all()
+    for occurrence in future:
+        db.delete(occurrence)
     db.commit()
 
 

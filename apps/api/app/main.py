@@ -12,7 +12,16 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Settings
 from app.database import build_engine, database_ready
-from app.finance import advances, cards, categories, expenses, financing, income_plans, recurrences
+from app.finance import (
+    advances,
+    cards,
+    categories,
+    expenses,
+    financing,
+    income_plans,
+    projection,
+    recurrences,
+)
 from app.finance import routes as finance
 from app.finance.run_recurring import run as run_recurring
 from app.identity import auth, invites, recovery, workspaces
@@ -24,7 +33,7 @@ logger = logging.getLogger(__name__)
 class HealthResponse(BaseModel):
     status: Literal["ok", "unavailable"]
     database: Literal["ready", "unavailable"]
-    stage: Literal["E08"] = "E08"
+    stage: Literal["E09"] = "E09"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -53,7 +62,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Financeiro API",
-        version="0.8.0",
+        version="0.9.0",
         lifespan=lifespan,
         docs_url="/docs" if settings.app_env != "production" else None,
         redoc_url=None,
@@ -80,6 +89,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(advances.router)
     app.include_router(recurrences.router)
     app.include_router(income_plans.router)
+    app.include_router(projection.router)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -99,7 +109,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health/live")
     def live():
-        return {"status": "ok", "stage": "E08"}
+        return {"status": "ok", "stage": "E09"}
 
     @app.get("/health/ready", response_model=HealthResponse)
     def ready(response: Response):

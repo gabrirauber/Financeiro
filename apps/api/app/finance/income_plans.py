@@ -199,9 +199,15 @@ def edit_plan(workspace_id: UUID, plan_id: UUID, data: PlanInput, db: Db, user: 
 
 @router.delete("/income-plans/{plan_id}", status_code=204)
 def deactivate_plan(workspace_id: UUID, plan_id: UUID, db: Db, user: CurrentUser):
-    require_member(db, workspace_id, user.id, lock=True)
+    workspace, _ = require_member(db, workspace_id, user.id, lock=True)
     row = plan_or_404(db, workspace_id, plan_id)
     row.active = False
+    future = db.scalars(select(IncomeOccurrence).where(
+        IncomeOccurrence.plan_id == row.id,
+        IncomeOccurrence.month > today(workspace).replace(day=1),
+    )).all()
+    for occurrence in future:
+        db.delete(occurrence)
     db.commit()
 
 
