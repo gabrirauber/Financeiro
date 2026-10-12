@@ -21,6 +21,7 @@ from app.finance import (
     income_plans,
     projection,
     recurrences,
+    reports,
 )
 from app.finance import routes as finance
 from app.finance.run_recurring import run as run_recurring
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 class HealthResponse(BaseModel):
     status: Literal["ok", "unavailable"]
     database: Literal["ready", "unavailable"]
-    stage: Literal["E09"] = "E09"
+    stage: Literal["E10"] = "E10"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -62,7 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Financeiro API",
-        version="0.9.0",
+        version="0.10.0",
         lifespan=lifespan,
         docs_url="/docs" if settings.app_env != "production" else None,
         redoc_url=None,
@@ -90,6 +91,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(recurrences.router)
     app.include_router(income_plans.router)
     app.include_router(projection.router)
+    app.include_router(reports.router)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -109,7 +111,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health/live")
     def live():
-        return {"status": "ok", "stage": "E09"}
+        return {"status": "ok", "stage": "E10"}
 
     @app.get("/health/ready", response_model=HealthResponse)
     def ready(response: Response):

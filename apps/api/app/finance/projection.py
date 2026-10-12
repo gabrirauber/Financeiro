@@ -189,15 +189,15 @@ def month_values(db, workspace_id, month, current, historical):
     }
 
 
-@router.get("/projection")
-def projection(workspace_id: UUID, db: Db, user: CurrentUser,
-               month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")):
-    workspace, _ = require_member(db, workspace_id, user.id, lock=True)
+def parse_month(month: str):
     try:
         year, number = map(int, month.split("-"))
-        target = date(year, number, 1)
+        return date(year, number, 1)
     except ValueError as exc:
         raise HTTPException(422, "Informe um mês válido.") from exc
+
+
+def build_projection(db, workspace_id, workspace, target):
     current = today(workspace)
     current_month = current.replace(day=1)
     historical = target < current_month
@@ -244,3 +244,10 @@ def projection(workspace_id: UUID, db: Db, user: CurrentUser,
         "overdue_cents": overdue,
         "projected_balance_cents": projected,
     }
+
+
+@router.get("/projection")
+def projection(workspace_id: UUID, db: Db, user: CurrentUser,
+               month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")):
+    workspace, _ = require_member(db, workspace_id, user.id, lock=True)
+    return build_projection(db, workspace_id, workspace, parse_month(month))

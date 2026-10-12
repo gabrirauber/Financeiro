@@ -1,10 +1,12 @@
-# Financeiro API — E09
+# Financeiro API — E10
 
 Python 3.13, FastAPI, SQLAlchemy, PostgreSQL e Alembic. A API mantém usuários, espaços compartilhados, contas, receitas, transferências, categorias, subcategorias, despesas pagas, cartões, parcelas, faturas, antecipações e pagamentos parciais.
 
 Na E08, também mantém despesas fixas, assinaturas no cartão, rendas previstas e recebimentos vinculados. A rotina mensal roda no servidor ao iniciar e depois a cada hora; também pode ser executada manualmente com `.venv/Scripts/python.exe -m app.finance.run_recurring`. Todas as ocorrências têm chaves únicas por regra e mês para evitar duplicidade. A rotina depende de o serviço da API permanecer ativo; um agendamento externo pode usar o mesmo comando em uma futura configuração de hospedagem.
 
 Na E09, `GET /workspaces/{id}/projection?month=AAAA-MM` entrega resultado por competência, saldo final previsto e composição dos valores. O resultado considera receitas recebidas e previstas, despesas pagas, fixas pendentes e faturas do mês; o principal refinanciado sai do resultado original e entra nas parcelas futuras. O saldo parte do caixa real, soma apenas recebimentos pendentes e desconta somente pagamentos ainda devidos, inclusive atrasados em linha separada. Consultas a meses anteriores usam saldo histórico da data de encerramento. Não houve mudança de esquema: a versão física do banco continua `e08`.
+
+Na E10, `GET /workspaces/{id}/reports/monthly.pdf?month=AAAA-MM&detail=false` gera o PDF autenticado do mês. `detail=true` acrescenta os lançamentos. O relatório usa o cálculo da E09 e mostra categorias, receitas, faturas, financiamento e saldos das contas. O arquivo retorna como anexo com `Cache-Control: no-store`; não fica salvo no servidor. A versão física do banco continua `e08`.
 
 ## Desenvolvimento local
 

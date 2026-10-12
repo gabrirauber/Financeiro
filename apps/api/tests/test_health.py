@@ -17,7 +17,7 @@ def settings(**kwargs):
 
 def test_liveness_does_not_require_database():
     with TestClient(create_app(settings())) as client:
-        assert client.get("/health/live").json() == {"status": "ok", "stage": "E09"}
+        assert client.get("/health/live").json() == {"status": "ok", "stage": "E10"}
 
 
 def test_readiness_reports_failure_without_secrets():
@@ -26,7 +26,7 @@ def test_readiness_reports_failure_without_secrets():
         with TestClient(app) as client:
             response = client.get("/health/ready")
     assert response.status_code == 503
-    assert response.json() == {"status": "unavailable", "database": "unavailable", "stage": "E09"}
+    assert response.json() == {"status": "unavailable", "database": "unavailable", "stage": "E10"}
     assert "secret" not in response.text
     assert response.headers["cache-control"] == "no-store"
 
