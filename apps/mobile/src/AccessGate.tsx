@@ -6,6 +6,7 @@ import { clearSession, readSession, saveSession } from './session';
 import { MembersPanel } from './MembersPanel';
 import { Recovery } from './Recovery';
 import { Button, Card, palette } from './ui';
+import { useToastSetter } from './Toast';
 
 const input = { backgroundColor: 'white', borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink };
 export function AccessGate({ children }: { children: (workspace: Workspace, token: string) => React.ReactNode }) {
@@ -23,7 +24,7 @@ export function AccessGate({ children }: { children: (workspace: Workspace, toke
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(true);
-  const [error, setError] = useState('');
+  const setError = useToastSetter('error');
 
   async function load(value: string) {
     const [profile, workspaces] = await Promise.all([
@@ -119,7 +120,6 @@ export function AccessGate({ children }: { children: (workspace: Workspace, toke
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 24, gap: 16, width: '100%', maxWidth: 560, alignSelf: 'center' }}>
       <Text style={{ fontSize: 30, fontWeight: '800', color: palette.ink }}>financeiro.</Text>
       <Text style={{ color: palette.muted }}>E08 · planejamento mensal.</Text>
-      {error ? <Text accessibilityRole="alert" style={{ color: '#923D2B' }}>{error}</Text> : null}
       {busy ? <Text accessibilityLiveRegion="polite">Aguarde…</Text> : null}
       {!user ? <Card>
         <Text style={{ fontSize: 22, color: palette.ink }}>{register ? 'Crie seu acesso' : 'Boas-vindas'}</Text>

@@ -4,6 +4,7 @@ import { Member, request, Workspace } from './api';
 import { Account, Category, CreditCard } from './finance';
 import { localDate, money, parseCents, validDate } from './prototype';
 import { Button, Card, Chip, palette } from './ui';
+import { useToastSetter } from './Toast';
 
 type Rule = { id: string; kind: 'expense' | 'card'; description: string; amount_cents: number; day_of_month: number; category_id: string; subcategory_id: string; payment_method: 'pix' | 'debit' | 'cash' | null; card_id: string | null; active: boolean };
 type Occurrence = { id: string; kind: 'expense' | 'card'; description: string; due_on: string; amount_cents: number; expense_id: string | null; purchase_id: string | null; paid_cents: number | null; payment_method: 'pix' | 'debit' | 'cash' | null };
@@ -41,8 +42,8 @@ export function PlanningPanel({workspace, token, period, refresh, onChanged}: {w
   const [date, setDate] = useState(localDate());
   const [complete, setComplete] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const setError = useToastSetter('error');
+  const setNotice = useToastSetter('success');
 
   async function load() {
     const [r, o, p, e, a, c, cats, m] = await Promise.all([
@@ -129,8 +130,6 @@ export function PlanningPanel({workspace, token, period, refresh, onChanged}: {w
   return <View style={{gap:16}}>
     <Text style={{fontSize:28,fontWeight:'700',color:palette.ink}}>Planejamento</Text>
     <Text style={{color:palette.muted}}>Contas fixas, assinaturas e rendas previstas de {period.slice(5)}/{period.slice(0,4)}.</Text>
-    {!!error && <Text accessibilityRole="alert" style={{color:'#AA422E'}}>{error}</Text>}
-    {!!notice && <Text accessibilityLiveRegion="polite" style={{color:palette.green}}>{notice}</Text>}
     <View style={{gap:8}}><Button label="Nova despesa fixa" onPress={() => start('expense')} /><Button label="Nova assinatura no cartão" secondary onPress={() => start('card')} /><Button label="Nova renda prevista" secondary onPress={() => start('income')} /></View>
     {mode && <Card>
       <Text style={{fontSize:20,color:palette.ink,fontWeight:'700'}}>{editing ? 'Editar' : 'Cadastrar'} {mode === 'expense' ? 'despesa fixa' : mode === 'card' ? 'assinatura no cartão' : 'renda prevista'}</Text>

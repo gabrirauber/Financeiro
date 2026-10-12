@@ -3,6 +3,7 @@ import { Alert, Platform, Pressable, ScrollView, Text, TextInput, View } from 'r
 import { request, Workspace } from './api';
 import { localDate, money, parseCents, validDate } from './prototype';
 import { Button, Card, Chip, palette } from './ui';
+import { useToastSetter } from './Toast';
 
 type Account = { id: string; name: string; kind: 'bank' | 'cash'; opening_balance_cents: number; balance_cents: number; opened_on: string };
 type Movement = { id: string; kind: 'income' | 'transfer_in' | 'transfer_out' | 'expense' | 'bill_payment'; amount_cents: number; occurred_on: string; note: string; transfer_id: string | null };
@@ -25,8 +26,8 @@ export function AccountsPanel({ workspace, token }: { workspace: Workspace; toke
   const [source, setSource] = useState('');
   const [destination, setDestination] = useState('');
   const [editing, setEditing] = useState<string>();
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const setError = useToastSetter('error');
+  const setNotice = useToastSetter('success');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -111,8 +112,6 @@ export function AccountsPanel({ workspace, token }: { workspace: Workspace; toke
     <Text style={{ color: palette.ink, fontSize: 28, fontWeight: '700' }}>Suas contas</Text>
     <Text style={{ color: palette.muted }}>Saldos e movimentações do espaço {workspace.name}.</Text>
     {loading && <Text style={{ color: palette.muted }}>Carregando contas…</Text>}
-    {!!notice && <Text accessibilityLiveRegion="polite" style={{ color: palette.green }}>{notice}</Text>}
-    {!!error && <Text accessibilityLiveRegion="polite" style={{ color: '#AA422E' }}>{error}</Text>}
     <Card><Text style={{ color: palette.muted }}>SALDO TOTAL</Text><Text style={{ color: palette.ink, fontSize: 32, fontWeight: '700' }}>{money(total)}</Text><Text style={{ color: palette.muted }}>O saldo inicial compõe o caixa, mas não é receita do mês.</Text></Card>
     {accounts.map(item => <Pressable key={item.id} accessibilityRole="button" onPress={() => void choose(item.id)}><Card><Text style={{ color: palette.ink, fontWeight: '700' }}>{item.name} {selected === item.id ? '✓' : ''}</Text><Text style={{ color: palette.muted }}>{item.kind === 'bank' ? 'Conta bancária' : 'Dinheiro'}</Text><Text style={{ color: palette.ink, fontSize: 22, fontWeight: '700' }}>{money(item.balance_cents)}</Text></Card></Pressable>)}
     {!accounts.length && !loading && <Text style={{ color: palette.muted }}>Cadastre sua primeira conta para começar.</Text>}

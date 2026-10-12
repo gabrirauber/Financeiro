@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Account, Category, Expense, ExpenseInput, Subcategory, CreditCard, CardPurchaseInput, dateToDisplay, dateToIso, paymentLabel } from './finance';
 import { localDate, parseCents, validDate } from './prototype';
 import { CategoryCreator } from './CategoryCreator';
 import { Button, Chip, palette } from './ui';
+import { useToastSetter } from './Toast';
 
 export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory, onSubcategory, onCreditSave, cards, initial }: {
   onCancel: () => void;
@@ -26,9 +27,8 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
   const [cardId, setCardId] = useState(cards[0]?.id || '');
   const [count, setCount] = useState('1');
   const [firstBill, setFirstBill] = useState('');
-  const [error, setError] = useState('');
+  const setError = useToastSetter('error');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { setError(''); }, [amount, category, subcategory, date, payment, source, note]);
   const selected = categories.find(item => item.id === category);
   const visibleCategories = categories.filter(item => item.active || item.id === category);
   const visibleSubcategories = selected?.subcategories.filter(item => item.active || item.id === subcategory) || [];
@@ -103,7 +103,6 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
       </>}
       <Text style={s.label}>Observação <Text style={s.hint}>(opcional)</Text></Text>
       <TextInput accessibilityLabel="Observação" placeholder="Algo para lembrar?" style={[s.input, { minHeight: 80 }]} value={note} onChangeText={setNote} multiline maxLength={200} />
-      {!!error && <Text accessibilityRole="alert" accessibilityLiveRegion="assertive" style={s.error}>{error}</Text>}
       <Button label={busy ? 'Salvando…' : initial ? 'Salvar alterações' : payment === 'credit' ? 'Salvar compra no cartão' : 'Salvar despesa'} onPress={() => { if (!busy) void save(); }} />
       <Button label="Cancelar" onPress={onCancel} secondary />
     </ScrollView>
@@ -116,5 +115,4 @@ const s = StyleSheet.create({
   input: { borderColor: palette.line, borderWidth: 1, backgroundColor: 'white', borderRadius: 14, padding: 15, fontSize: 16, color: palette.ink },
   amountRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: palette.green, paddingVertical: 8 },
   currency: { fontSize: 25, color: palette.muted, marginRight: 12 }, amount: { fontSize: 40, color: palette.ink, flex: 1, minHeight: 64 },
-  error: { backgroundColor: '#FCE9E3', color: '#923D2B', padding: 14, borderRadius: 12 },
 });

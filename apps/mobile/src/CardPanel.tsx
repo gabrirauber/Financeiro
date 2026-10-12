@@ -4,6 +4,7 @@ import { request, Workspace } from './api';
 import { Account, Category, CreditCard, Invoice, dateToDisplay, dateToIso, monthIso } from './finance';
 import { localDate, money, parseCents } from './prototype';
 import { Button, Card, Chip, palette } from './ui';
+import { useToastSetter } from './Toast';
 
 const input = { backgroundColor: 'white', borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink };
 const label = { color: palette.ink, fontSize: 15, fontWeight: '600' as const };
@@ -32,8 +33,8 @@ export function CardPanel({ workspace, token, refresh }: {
   const [closing, setClosing] = useState('10');
   const [due, setDue] = useState('20');
   const [nextBill, setNextBill] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const setError = useToastSetter('error');
+  const setNotice = useToastSetter('success');
   const [busy, setBusy] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<string>();
   const [remainingAmount, setRemainingAmount] = useState('');
@@ -212,8 +213,6 @@ export function CardPanel({ workspace, token, refresh }: {
   return <View style={{ gap: 16 }}>
     <Text style={{ fontSize: 28, fontWeight: '700', color: palette.ink }}>Seus cartões</Text>
     <Text style={muted}>Compras por fatura. O saldo da conta muda quando a fatura é paga.</Text>
-    {!!notice && <Card><Text style={muted}>{notice}</Text></Card>}
-    {!!error && <Card><Text accessibilityRole="alert" style={{ color: '#AA422E' }}>{error}</Text></Card>}
     {current ? <>
       <Button secondary label="← Todas as faturas" onPress={() => { setSelected(undefined); setPartialOpen(false); setAdvanceOpen(false); }} />
       <Card>

@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 import { Button, palette } from './ui';
+import { useToastSetter } from './Toast';
 
 export function CategoryCreator({ kind, existing, onCreate }: {
   kind: 'categoria' | 'subcategoria'; existing: string[];
@@ -9,7 +10,7 @@ export function CategoryCreator({ kind, existing, onCreate }: {
   const input = useRef<TextInput>(null);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
-  const [error, setError] = useState('');
+  const setError = useToastSetter('error');
   const [busy, setBusy] = useState(false);
   function close() {
     input.current?.blur();
@@ -32,7 +33,6 @@ export function CategoryCreator({ kind, existing, onCreate }: {
       onFocus={() => setOpen(true)}
       onChangeText={value => { setName(value); setError(''); }}
       style={{ borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, backgroundColor: 'white', fontSize: 16, color: palette.ink }} />
-    {!!error && <Text accessibilityRole="alert" style={{ color: '#923D2B' }}>{error}</Text>}
     {open && <View style={{ gap: 8 }}>
       <Button label={busy ? 'Cadastrando…' : 'Criar'} onPress={() => { if (!busy) void create(); }} />
       <Button label="Cancelar" secondary onPress={close} />

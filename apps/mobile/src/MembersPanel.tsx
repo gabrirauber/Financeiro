@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Share, Text, View } from 'react-native';
 import { Member, request, Workspace } from './api';
 import { Button, Card, palette } from './ui';
+import { useToastSetter } from './Toast';
 
 type Invite = { id: string; expires_at: string };
 export function MembersPanel({ workspace, token, onClose, onChanged }: { workspace: Workspace; token: string; onClose: () => void; onChanged: () => Promise<void> }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [created, setCreated] = useState<{id: string; code: string}>();
-  const [error, setError] = useState('');
+  const setError = useToastSetter('error');
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<string>();
   async function load() {
@@ -26,7 +27,6 @@ export function MembersPanel({ workspace, token, onClose, onChanged }: { workspa
     await request(`/workspaces/${workspace.id}/members/${id}`, token, 'DELETE'); await load();
   }
   return <Card><Text style={{ fontSize: 20, color: palette.ink }}>Participantes · {workspace.name}</Text>
-    {!!error && <Text accessibilityRole="alert" style={{ color: '#923D2B' }}>{error}</Text>}
     {workspace.role === 'admin' && <>
       <Text>Convite de uso único, válido por 24 horas.</Text>
       {!!created && <View style={{gap:8}}><Text selectable accessibilityLabel="Código gerado" style={{fontSize:22,fontWeight:'700'}}>{created.code}</Text>

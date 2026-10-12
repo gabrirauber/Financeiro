@@ -6,6 +6,8 @@ Rendas previstas não alteram o saldo. No dia previsto, ao abrir o app, a pessoa
 
 Para conferir no app local:
 
+As confirmações e os erros aparecem como avisos flutuantes na parte inferior e somem automaticamente (ou ao tocar neles). O quadro permanente de conexão não aparece mais no resumo.
+
 1. Em **Planejamento**, cadastre uma despesa fixa de R$ 100 no dia de hoje. Confirme que o resumo a mostra como prevista e que o saldo da conta não muda. Registre o pagamento por R$ 110 e confirme que o resumo mostra apenas R$ 110 e o saldo cai R$ 110.
 2. Cadastre uma assinatura de R$ 50 no cartão no dia de hoje. Confirme uma única compra na fatura. Reabra o app: a assinatura não deve duplicar.
 3. Cadastre uma renda prevista de R$ 3.000 para hoje. No lembrete, registre R$ 2.800 e escolha “Manter diferença”. No Planejamento, devem restar R$ 200; o caixa deve subir apenas R$ 2.800. Um novo recebimento pode encerrar a previsão.

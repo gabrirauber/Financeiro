@@ -4,6 +4,7 @@ import { request, Workspace } from './api';
 import { Account } from './finance';
 import { localDate, money, parseCents } from './prototype';
 import { Button, Card, Chip, palette } from './ui';
+import { ToastViewport, useToastSetter } from './Toast';
 
 type Reminder = { id: string; description: string; due_on: string; remaining_cents: number; received_cents: number };
 const input = { backgroundColor: 'white', borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink };
@@ -17,7 +18,7 @@ export function IncomeReminder({workspace, token, refresh, onChanged}: {workspac
   const [amount, setAmount] = useState('');
   const [complete, setComplete] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const setError = useToastSetter('error');
   const current = reminders[0];
   async function load() {
     const [due, all] = await Promise.all([
@@ -41,7 +42,6 @@ export function IncomeReminder({workspace, token, refresh, onChanged}: {workspac
         {current && <>
           <Text style={{color:palette.ink}}>{current.description} · {money(current.remaining_cents)} a receber</Text>
           <Text style={{color:palette.muted}}>Previsão em {current.due_on.split('-').reverse().join('/')}. Informe se recebeu ou deixe o lembrete para amanhã.</Text>
-          {!!error && <Text accessibilityRole="alert" style={{color:'#AA422E'}}>{error}</Text>}
           {!receiving ? <>
             <Button label="Recebi" onPress={() => setReceiving(true)} />
             <Button label="Ainda não recebi" secondary onPress={() => void act(async () => { await request(`${root}/income-occurrences/${current.id}/defer`, token, 'POST'); })} />
@@ -58,6 +58,6 @@ export function IncomeReminder({workspace, token, refresh, onChanged}: {workspac
           </>}
         </>}
       </Card>
-    </ScrollView>
+    </ScrollView><ToastViewport bottom={24} />
   </Modal>;
 }

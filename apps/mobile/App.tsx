@@ -5,7 +5,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ExpenseForm } from './src/ExpenseForm';
 import { money } from './src/prototype';
 import { CategoryCreator } from './src/CategoryCreator';
-import { ApiStatus } from './src/ApiStatus';
+import { ToastProvider, ToastViewport, useToastSetter } from './src/Toast';
 import { AccessGate } from './src/AccessGate';
 import { AccountsPanel } from './src/AccountsPanel';
 import { CardPanel } from './src/CardPanel';
@@ -17,9 +17,9 @@ import { Button, Card, palette } from './src/ui';
 
 type Tab = 'Resumo' | 'Contas' | 'Cartões' | 'Planejamento';
 export default function App() {
-  return <SafeAreaProvider><AccessGate>{(workspace, token) =>
+  return <SafeAreaProvider><ToastProvider><View style={{ flex: 1 }}><AccessGate>{(workspace, token) =>
     <Home key={workspace.id} workspace={workspace} token={token} />
-  }</AccessGate></SafeAreaProvider>;
+  }</AccessGate><ToastViewport /></View></ToastProvider></SafeAreaProvider>;
 }
 
 function Home({ workspace, token }: { workspace: Workspace; token: string }) {
@@ -35,8 +35,8 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
   const [form, setForm] = useState(false);
   const [editing, setEditing] = useState<Expense>();
   const [manageCategories, setManageCategories] = useState(false);
-  const [notice, setNotice] = useState('');
-  const [error, setError] = useState('');
+  const setNotice = useToastSetter('success');
+  const setError = useToastSetter('error');
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
   const period = monthIso(month);
@@ -164,10 +164,7 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
       <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>E08 · PLANEJAMENTO MENSAL</Text></View>
       <ScrollView contentContainerStyle={s.content}>
         {tab === 'Resumo' ? <>
-          <ApiStatus />
           <View style={s.month}><Pressable accessibilityRole="button" accessibilityLabel="Mês anterior" onPress={() => { setMonth(value => new Date(value.getFullYear(), value.getMonth() - 1, 1)); setNotice(''); }} style={s.arrow}><Text style={s.arrowText}>‹</Text></Pressable><Text style={s.monthText}>{monthTitle}</Text><Pressable accessibilityRole="button" accessibilityLabel="Próximo mês" onPress={() => { setMonth(value => new Date(value.getFullYear(), value.getMonth() + 1, 1)); setNotice(''); }} style={s.arrow}><Text style={s.arrowText}>›</Text></Pressable></View>
-          {!!notice && <Pressable accessibilityRole="button" accessibilityLabel="Dispensar confirmação" onPress={() => setNotice('')} style={s.notice}><Text accessibilityLiveRegion="polite" style={s.small}>{notice}</Text></Pressable>}
-          {!!error && <Card><Text accessibilityRole="alert" style={{ color: '#AA422E' }}>{error}</Text><Button label="Tentar novamente" secondary onPress={() => setRefresh(value => value + 1)} /></Card>}
           {loading && <Text style={s.small}>Carregando gastos…</Text>}
           <View style={s.hero}><Text style={s.heroLabel}>GASTOS E COMPROMISSOS DO MÊS</Text><Text style={s.heroValue}>{money(total)}</Text><View style={s.heroDivider} /><Text style={s.heroCaption}>Compras e despesas, incluindo fixas pendentes: {money(consumptionTotal)} · Faturas parceladas: {money(financedTotal)}</Text><Text style={s.heroFoot}>Despesa fixa paga substitui a previsão pelo valor real. Compras no cartão ficam no mês da fatura; financiamento futuro não é nova compra.</Text></View>
           <View style={s.section}><Text style={s.sectionTitle}>{category ? category.name : 'Por categoria'}</Text><Text style={s.small}>{category ? 'Subcategorias' : 'Toque para explorar'}</Text></View>
@@ -224,11 +221,10 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
       <Pressable accessibilityRole="button" accessibilityLabel="Adicionar despesa" onPress={() => { void openNewExpense(); }} style={({ pressed }) => [s.fab, pressed && { opacity: 0.8 }]}><Text style={s.fabText}>+</Text></Pressable>
       <View style={s.nav}>{(['Resumo', 'Contas', 'Cartões', 'Planejamento'] as Tab[]).map((item, index) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => { setTab(item); setDetail(null); if (item === 'Resumo') setRefresh(value => value + 1); }} style={s.navItem}><View style={[s.navIcon, tab === item && s.navActive]}><Text style={[s.navSymbol, tab === item && { color: palette.green }]}>{['▥', '▤', '▱', '◷'][index]}</Text></View><Text style={[s.navLabel, tab === item && { color: palette.green, fontWeight: '700' }]}>{item}</Text></Pressable>)}</View>
     </View>
-    {form && <Modal visible animationType="slide" onRequestClose={() => setForm(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ExpenseForm key={editing?.id || 'new'} initial={editing} categories={categories} accounts={accounts} cards={cards} onCreditSave={saveCredit} onCategory={addCategory} onSubcategory={addSubcategory} onSave={saveExpense} onCancel={() => { setForm(false); setEditing(undefined); }} /></View></SafeAreaView></Modal>}
+    {form && <Modal visible animationType="slide" onRequestClose={() => setForm(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ExpenseForm key={editing?.id || 'new'} initial={editing} categories={categories} accounts={accounts} cards={cards} onCreditSave={saveCredit} onCategory={addCategory} onSubcategory={addSubcategory} onSave={saveExpense} onCancel={() => { setForm(false); setEditing(undefined); }} /></View><ToastViewport bottom={24} /></SafeAreaView></Modal>}
     {manageCategories && <Modal visible animationType="slide" onRequestClose={() => setManageCategories(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <Text style={s.pageTitle}>Categorias e subcategorias</Text>
       <Text style={s.description}>As opções pertencem a este espaço e ficam disponíveis para todos os participantes. Desativar preserva os lançamentos antigos.</Text>
-      {!!error && <Text accessibilityRole="alert" style={{ color: '#AA422E' }}>{error}</Text>}
       <Button label="Voltar ao resumo" secondary onPress={() => setManageCategories(false)} />
       <CategoryCreator kind="categoria" existing={categories.map(item => item.name)} onCreate={async name => { await addCategory(name); }} />
       {categories.filter(item => item.active).map(item => <Card key={item.id}>
@@ -244,7 +240,7 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
       {categories.filter(item => !item.active).map(item =>
         <Card key={item.id}><CategoryActionRow label={item.name} action="Reativar" inactive
           onAction={() => { void restoreCategory(item).catch(e => setError(e instanceof Error ? e.message : 'Não foi possível reativar.')); }} /></Card>)}
-    </ScrollView></View></SafeAreaView></Modal>}
+    </ScrollView></View><ToastViewport bottom={24} /></SafeAreaView></Modal>}
     <IncomeReminder workspace={workspace} token={token} refresh={refresh} onChanged={() => setRefresh(value => value + 1)} />
   </SafeAreaView>;
 }
@@ -290,5 +286,5 @@ const s = StyleSheet.create({
   transaction: { flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: '#F0F1EB', paddingVertical: 10 }, transactionDot: { width: 8, height: 8, borderRadius: 4 },
   footerNote: { fontSize: 12, color: palette.muted, textAlign: 'center', lineHeight: 19 }, fab: { position: 'absolute', right: 24, bottom: 100, width: 58, height: 58, borderRadius: 19, backgroundColor: palette.green, alignItems: 'center', justifyContent: 'center', elevation: 5, boxShadow: '0 4px 12px #20362f25' }, fabText: { fontSize: 34, lineHeight: 40, color: 'white' },
   nav: { flexDirection: 'row', borderTopWidth: 1, borderColor: palette.line, backgroundColor: palette.bg, paddingVertical: 8 }, navItem: { flex: 1, alignItems: 'center', gap: 4, minHeight: 62 }, navIcon: { width: 58, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 14 }, navActive: { backgroundColor: '#E4EBDC' }, navSymbol: { fontSize: 23, color: palette.muted }, navLabel: { fontSize: 12, color: palette.muted },
-  pageTitle: { fontSize: 28, color: palette.ink, fontWeight: '700' }, description: { fontSize: 14, lineHeight: 23, color: palette.muted }, bankCard: { padding: 24, gap: 24, backgroundColor: palette.ink, borderRadius: 24 }, bankName: { fontSize: 24, color: 'white', fontWeight: '600' }, bankDates: { flexDirection: 'row', justifyContent: 'space-between' }, bankDate: { color: 'white', fontWeight: '600', marginTop: 5 }, empty: { paddingVertical: 18, gap: 12 }, notice: { backgroundColor: '#E7EDDF', padding: 14, borderRadius: 14 },
+  pageTitle: { fontSize: 28, color: palette.ink, fontWeight: '700' }, description: { fontSize: 14, lineHeight: 23, color: palette.muted }, bankCard: { padding: 24, gap: 24, backgroundColor: palette.ink, borderRadius: 24 }, bankName: { fontSize: 24, color: 'white', fontWeight: '600' }, bankDates: { flexDirection: 'row', justifyContent: 'space-between' }, bankDate: { color: 'white', fontWeight: '600', marginTop: 5 }, empty: { paddingVertical: 18, gap: 12 },
 });
