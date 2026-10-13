@@ -55,12 +55,12 @@ export function ProjectionPanel({ workspace, token, period, refresh }: {
     <Text style={{color:palette.muted}}>{historical ? 'Valores realizados no mês consultado' : data.kind === 'future' ? 'Projeção para este mês' : 'Realizado e ainda previsto para este mês'}</Text>
     <View style={{gap:4,paddingVertical:6}}>
       <Text style={{color:palette.muted}}>Resultado do mês</Text>
-      <Text style={{fontSize:30,fontWeight:'800',color:negative ? '#AA422E' : palette.green}}>{money(data.result_cents)}</Text>
+      <Text style={{fontSize:30,fontWeight:'800',color:negative ? palette.danger : palette.green}}>{money(data.result_cents)}</Text>
       <Text style={{color:palette.muted}}>{negative ? 'As despesas e faturas superam a renda considerada.' : 'Renda considerada menos despesas e faturas do mês.'}</Text>
     </View>
     <View style={{borderTopWidth:1,borderColor:palette.line,paddingTop:14,gap:5}}>
       <Text style={{color:palette.muted}}>{historical ? 'Saldo no fim daquele mês' : 'Saldo final previsto'}</Text>
-      <Text style={{fontSize:25,fontWeight:'700',color:balanceNegative ? '#AA422E' : palette.ink}}>{money(data.projected_balance_cents)}</Text>
+      <Text style={{fontSize:25,fontWeight:'700',color:balanceNegative ? palette.danger : palette.ink}}>{money(data.projected_balance_cents)}</Text>
       <Text style={{color:palette.muted}}>{historical ? 'Saldo das contas naquela data.' : 'Parte do saldo em caixa e considera apenas o que ainda falta receber e pagar.'}</Text>
     </View>
     <View style={{borderTopWidth:1,borderColor:palette.line,paddingTop:14,gap:4}}>

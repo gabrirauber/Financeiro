@@ -33,7 +33,7 @@ export function Recovery({ token, onDone }: { token?: string; onDone: () => void
         <TextInput accessibilityLabel="Nova senha" placeholder="Nova senha (mínimo 10 caracteres)" secureTextEntry style={style} value={password} onChangeText={setPassword} maxLength={128} />
         <TextInput accessibilityLabel="Confirmar nova senha" placeholder="Confirme a nova senha" secureTextEntry style={style} value={confirmation} onChangeText={setConfirmation} maxLength={128} />
       </> : <TextInput accessibilityLabel="E-mail de recuperação" placeholder="Seu e-mail" autoCapitalize="none" keyboardType="email-address" style={style} value={email} onChangeText={setEmail} />)}
-      {busy ? <Text>Aguarde…</Text> : <>
+      {busy ? <Text style={{ color: palette.ink }}>Aguarde…</Text> : <>
         {!success && <Button label={token ? 'Alterar senha' : 'Enviar link de recuperação'} onPress={() => void submit()} />}
         <Button label="Voltar para entrada" secondary onPress={onDone} />
       </>}

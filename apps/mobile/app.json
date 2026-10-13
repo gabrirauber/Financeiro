@@ -1,10 +1,11 @@
 {
   "expo": {
-    "name": "Financeiro",
+    "name": "Meu Controle",
     "slug": "financeiro-prototipo",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/meu-controle-icon-concept-v2.png",
+    "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.gabrirauber.financeiro"
     },

@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AppState, Linking, Platform, ScrollView, Text, TextInput, View } from 'react-native';
+import { AppState, Image, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ApiError, request, User, Workspace } from './api';
 import { clearSession, readSession, saveSession } from './session';
 import { MembersPanel } from './MembersPanel';
 import { Recovery } from './Recovery';
-import { Button, Card, palette } from './ui';
+import { Button, Card, palette, ThemeMode } from './ui';
 import { useToastSetter } from './Toast';
+import { saveOnboardingStep } from './onboardingProgress';
 
-const input = { backgroundColor: 'white', borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink };
-export function AccessGate({ children }: { children: (workspace: Workspace, token: string) => React.ReactNode }) {
+const input = () => ({ backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink });
+export function AccessGate({ children, theme, onToggleTheme }: { children: (workspace: Workspace, token: string, userId: string) => React.ReactNode; theme: ThemeMode; onToggleTheme: () => void }) {
   const [token, setToken] = useState<string>();
   const tokenRef = useRef<string | undefined>(undefined);
   function activate(value: string) { tokenRef.current = value; setToken(value); }
@@ -26,11 +27,12 @@ export function AccessGate({ children }: { children: (workspace: Workspace, toke
   const [busy, setBusy] = useState(true);
   const setError = useToastSetter('error');
 
-  async function load(value: string) {
+  async function load(value: string, newRegistration = false) {
     const [profile, workspaces] = await Promise.all([
       request<User>('/auth/me', value), request<Workspace[]>('/workspaces', value),
     ]);
     if (tokenRef.current !== value) return;
+    if (newRegistration) await saveOnboardingStep(profile.id, 0);
     setUser(profile);
     setSelected(workspaces[0]);
     if (workspaces.length === 0) setManaging(false);
@@ -95,7 +97,7 @@ export function AccessGate({ children }: { children: (workspace: Workspace, toke
       });
       await saveSession(result.token); activate(result.token); setPassword('');
       setCode('');
-      await load(result.token);
+      await load(result.token, register);
     });
   }
   async function logout() {
@@ -113,21 +115,28 @@ export function AccessGate({ children }: { children: (workspace: Workspace, toke
     {managing ? <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:20, maxWidth:560, width:'100%', alignSelf:'center', gap:16}}>
       <MembersPanel workspace={selected} token={token} onClose={() => setManaging(false)} onChanged={() => load(token)} />
       <Button label="Sair da conta" secondary onPress={() => void logout()} />
-    </ScrollView> : children(selected, token)}
+    </ScrollView> : children(selected, token, user.id)}
   </View>;
 
   return <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 24, gap: 16, width: '100%', maxWidth: 560, alignSelf: 'center' }}>
-      <Text style={{ fontSize: 30, fontWeight: '800', color: palette.ink }}>financeiro.</Text>
-      <Text style={{ color: palette.muted }}>E10 · relatório mensal.</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Image source={require('../assets/meu-controle-icon-concept-v2.png')} style={{ width: 48, height: 48, borderRadius: 13 }} />
+        <Text style={{ flex: 1, fontSize: 26, fontWeight: '800', color: palette.ink }}>Meu Controle</Text>
+        <Pressable accessibilityRole="switch" aria-checked={theme === 'dark'} accessibilityLabel="Modo escuro" onPress={onToggleTheme}
+          style={{ minHeight: 44, paddingHorizontal: 10, borderRadius: 12, backgroundColor: palette.soft, justifyContent: 'center' }}>
+          <Text style={{ color: palette.ink, fontSize: 12, fontWeight: '700' }}>{theme === 'dark' ? '☀ Claro' : '☾ Escuro'}</Text>
+        </Pressable>
+      </View>
+      <Text style={{ color: palette.muted }}>Organize suas contas e acompanhe seu mês.</Text>
       {busy ? <Text accessibilityLiveRegion="polite">Aguarde…</Text> : null}
       {!user ? <Card>
         <Text style={{ fontSize: 22, color: palette.ink }}>{register ? 'Crie seu acesso' : 'Boas-vindas'}</Text>
-        <TextInput accessibilityLabel="E-mail" placeholder="E-mail" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} style={input} editable={!busy} />
-        <TextInput accessibilityLabel="Senha" placeholder="Senha (mínimo 10 caracteres)" secureTextEntry value={password} onChangeText={setPassword} style={input} editable={!busy} maxLength={128} />
+        <TextInput accessibilityLabel="E-mail" placeholder="E-mail" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} style={input()} editable={!busy} />
+        <TextInput accessibilityLabel="Senha" placeholder="Senha (mínimo 10 caracteres)" secureTextEntry value={password} onChangeText={setPassword} style={input()} editable={!busy} maxLength={128} />
         {register && <>
           <Text style={{color: palette.muted}}>Recebeu um convite? Informe o código para entrar no espaço compartilhado. Sem código, criaremos seu espaço automaticamente.</Text>
-          <TextInput accessibilityLabel="Código de convite (opcional)" placeholder="Código de convite (opcional)" autoCapitalize="characters" value={code} onChangeText={setCode} style={input} editable={!busy} maxLength={64} />
+          <TextInput accessibilityLabel="Código de convite (opcional)" placeholder="Código de convite (opcional)" autoCapitalize="characters" value={code} onChangeText={setCode} style={input()} editable={!busy} maxLength={64} />
         </>}
         {!busy && <>
           <Button label={register ? 'Cadastrar' : 'Entrar'} onPress={() => void authenticate()} />
@@ -138,11 +147,11 @@ export function AccessGate({ children }: { children: (workspace: Workspace, toke
         <Text style={{ color: palette.muted }}>{user.email}</Text>
         <Text style={{ fontSize: 22, color: palette.ink }}>Comece seu espaço financeiro</Text>
         <Text style={{color:palette.muted}}>Entre com um convite ou crie seu próprio espaço.</Text>
-        <Card><Text style={{ fontWeight: '700' }}>Criar espaço</Text><TextInput accessibilityLabel="Nome do espaço" placeholder="Ex.: Finanças da casa" style={input} value={name} onChangeText={setName} maxLength={80} />
+        <Card><Text style={{ fontWeight: '700', color: palette.ink }}>Criar espaço</Text><TextInput accessibilityLabel="Nome do espaço" placeholder="Ex.: Finanças da casa" style={input()} value={name} onChangeText={setName} maxLength={80} />
         {!busy && <Button label="Criar espaço financeiro" onPress={() => void run(async () => {
           await request('/workspaces', token, 'POST', { name: name.trim() || 'Minhas finanças' }); setName(''); await load(token!);
         })} />}</Card>
-        <Card><Text style={{fontWeight:'700'}}>Entrar por código</Text><TextInput accessibilityLabel="Código de convite" placeholder="Código recebido" autoCapitalize="characters" value={code} onChangeText={setCode} style={input} maxLength={64} />{!busy && <Button label="Entrar no espaço compartilhado" onPress={() => void run(async () => {
+        <Card><Text style={{fontWeight:'700',color:palette.ink}}>Entrar por código</Text><TextInput accessibilityLabel="Código de convite" placeholder="Código recebido" autoCapitalize="characters" value={code} onChangeText={setCode} style={input()} maxLength={64} />{!busy && <Button label="Entrar no espaço compartilhado" onPress={() => void run(async () => {
           await request('/invites/accept', token, 'POST', {code}); setCode(''); await load(token!);
         })} />}</Card>
         {!busy && <Button label="Sair da conta" secondary onPress={() => void logout()} />}

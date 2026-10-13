@@ -43,7 +43,7 @@ export function ToastViewport({ bottom = 96 }: { bottom?: number }) {
     zIndex: 100, alignItems: 'center' }}>
     <Pressable accessibilityRole="button" accessibilityLabel={`${item.message}. Toque para dispensar`}
       onPress={dismiss} style={{ maxWidth: 560, width: '100%', borderRadius: 16, paddingVertical: 14,
-        paddingHorizontal: 18, backgroundColor: item.tone === 'error' ? '#923D2B' : palette.ink,
+        paddingHorizontal: 18, backgroundColor: item.tone === 'error' ? '#923D2B' : '#20362F',
         shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, elevation: 8 }}>
       <Text accessibilityLiveRegion={item.tone === 'error' ? 'assertive' : 'polite'}
         style={{ color: 'white', fontSize: 15, fontWeight: '600', lineHeight: 21 }}>{item.message}</Text>

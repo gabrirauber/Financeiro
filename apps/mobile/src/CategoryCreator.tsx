@@ -32,7 +32,7 @@ export function CategoryCreator({ kind, existing, onCreate }: {
       placeholder={`Nova ${kind}`} value={name} maxLength={40} editable={!busy}
       onFocus={() => setOpen(true)}
       onChangeText={value => { setName(value); setError(''); }}
-      style={{ borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, backgroundColor: 'white', fontSize: 16, color: palette.ink }} />
+      style={{ borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, backgroundColor: palette.white, fontSize: 16, color: palette.ink }} />
     {open && <View style={{ gap: 8 }}>
       <Button label={busy ? 'Cadastrando…' : 'Criar'} onPress={() => { if (!busy) void create(); }} />
       <Button label="Cancelar" secondary onPress={close} />

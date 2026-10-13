@@ -7,7 +7,7 @@ import { Button, Card, Chip, palette } from './ui';
 import { ToastViewport, useToastSetter } from './Toast';
 
 type Reminder = { id: string; description: string; due_on: string; remaining_cents: number; received_cents: number };
-const input = { backgroundColor: 'white', borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink };
+const input = () => ({ backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink });
 
 export function IncomeReminder({workspace, token, refresh, onChanged}: {workspace: Workspace; token: string; refresh: number; onChanged: () => void}) {
   const root = `/workspaces/${workspace.id}`;
@@ -46,12 +46,12 @@ export function IncomeReminder({workspace, token, refresh, onChanged}: {workspac
             <Button label="Recebi" onPress={() => setReceiving(true)} />
             <Button label="Ainda não recebi" secondary onPress={() => void act(async () => { await request(`${root}/income-occurrences/${current.id}/defer`, token, 'POST'); })} />
           </> : <>
-            <Text>Conta de recebimento</Text>
+            <Text style={{ color: palette.ink }}>Conta de recebimento</Text>
             <ScrollView horizontal contentContainerStyle={{gap:8}}>{accounts.map(a => <Chip key={a.id} label={a.name} selected={accountId === a.id} onPress={() => setAccountId(a.id)} />)}</ScrollView>
-            {!accounts.length && <Text>Cadastre uma conta antes de registrar o recebimento. Você pode escolher “Ainda não recebi” e voltar depois.</Text>}
-            <Text>Valor recebido (R$)</Text>
-            <TextInput accessibilityLabel="Valor recebido" style={input} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
-            <Text>Depois deste recebimento</Text>
+            {!accounts.length && <Text style={{ color: palette.ink }}>Cadastre uma conta antes de registrar o recebimento. Você pode escolher “Ainda não recebi” e voltar depois.</Text>}
+            <Text style={{ color: palette.ink }}>Valor recebido (R$)</Text>
+            <TextInput accessibilityLabel="Valor recebido" style={input()} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+            <Text style={{ color: palette.ink }}>Depois deste recebimento</Text>
             <View style={{flexDirection:'row',gap:8}}><Chip label="Concluir previsão" selected={complete} onPress={() => setComplete(true)} /><Chip label="Manter diferença" selected={!complete} onPress={() => setComplete(false)} /></View>
             <Button label={busy ? 'Salvando…' : 'Confirmar recebimento'} onPress={() => { const cents = parseCents(amount); if (!accountId || cents === null) { setError('Informe uma conta e um valor válido.'); return; } void act(async () => { await request(`${root}/income-occurrences/${current.id}/receive`, token, 'POST', {account_id:accountId,amount_cents:cents,occurred_on:localDate().split('/').reverse().join('-'),complete,request_id:`${Date.now()}-${Math.random().toString(36).slice(2)}`}); }); }} />
             <Button label="Voltar" secondary onPress={() => setReceiving(false)} />

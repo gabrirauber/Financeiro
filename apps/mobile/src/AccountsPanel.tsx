@@ -8,11 +8,11 @@ import { useToastSetter } from './Toast';
 type Account = { id: string; name: string; kind: 'bank' | 'cash'; opening_balance_cents: number; balance_cents: number; opened_on: string };
 type Movement = { id: string; kind: 'income' | 'transfer_in' | 'transfer_out' | 'expense' | 'bill_payment'; amount_cents: number; occurred_on: string; note: string; transfer_id: string | null };
 type Mode = 'account' | 'income' | 'transfer' | null;
-const input = { backgroundColor: 'white', borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink };
+const input = () => ({ backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink });
 const dateToIso = (value: string) => value.split('/').reverse().join('-');
 const dateToDisplay = (value: string) => value.split('-').reverse().join('/');
 
-export function AccountsPanel({ workspace, token }: { workspace: Workspace; token: string }) {
+export function AccountsPanel({ workspace, token, startCreateRequest, onCreated }: { workspace: Workspace; token: string; startCreateRequest?: number; onCreated?: () => void }) {
   const root = `/workspaces/${workspace.id}`;
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selected, setSelected] = useState<string>();
@@ -56,6 +56,7 @@ export function AccountsPanel({ workspace, token }: { workspace: Workspace; toke
     setDate(localDate()); setError('');
   }
   function start(next: Mode) { reset(); setMode(next); setAmount(next === 'account' ? '0,00' : ''); setSource(selected || accounts[0]?.id || ''); setDestination(accounts.find(a => a.id !== (selected || accounts[0]?.id))?.id || ''); }
+  useEffect(() => { if (startCreateRequest) start('account'); }, [startCreateRequest]);
   function startEdit(row: Movement) {
     setMode('income'); setEditing(row.id); setSource(selected || '');
     setAmount((row.amount_cents / 100).toFixed(2).replace('.', ','));
@@ -86,6 +87,7 @@ export function AccountsPanel({ workspace, token }: { workspace: Workspace; toke
       const savedMode = mode; const wasEditing = !!editing; const accountId = source;
       reset(); await load(savedMode === 'account' ? undefined : accountId);
       setNotice(wasEditing ? (savedMode === 'income' ? 'Receita atualizada.' : 'Transferência atualizada.') : savedMode === 'account' ? 'Conta cadastrada.' : savedMode === 'income' ? 'Receita recebida e saldo atualizado.' : 'Transferência registrada nas duas contas.');
+      if (savedMode === 'account') onCreated?.();
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível salvar.'); }
     finally { setBusy(false); }
   }
@@ -107,7 +109,7 @@ export function AccountsPanel({ workspace, token }: { workspace: Workspace; toke
   const current = accounts.find(item => item.id === selected);
   const total = accounts.reduce((sum, item) => sum + item.balance_cents, 0);
   const thisMonth = (value: string) => value.slice(0, 7) === dateToIso(localDate()).slice(0, 7);
-  const field = (label: string, value: string, change: (value: string) => void, props = {}) => <View style={{ gap: 5 }}><Text style={{ color: palette.ink, fontWeight: '600' }}>{label}</Text><TextInput style={input} value={value} onChangeText={change} {...props} /></View>;
+  const field = (label: string, value: string, change: (value: string) => void, props = {}) => <View style={{ gap: 5 }}><Text style={{ color: palette.ink, fontWeight: '600' }}>{label}</Text><TextInput style={input()} value={value} onChangeText={change} {...props} /></View>;
   return <View style={{ gap: 16 }}>
     <Text style={{ color: palette.ink, fontSize: 28, fontWeight: '700' }}>Suas contas</Text>
     <Text style={{ color: palette.muted }}>Saldos e movimentações do espaço {workspace.name}.</Text>
@@ -135,8 +137,8 @@ export function AccountsPanel({ workspace, token }: { workspace: Workspace; toke
         {statement.map(row => <View key={row.id} style={{ paddingVertical: 8, borderTopWidth: 1, borderColor: palette.line, gap: 4 }}>
           <Text style={{ color: palette.ink, fontWeight: '600' }}>{row.kind === 'income' ? 'Receita' : row.kind === 'expense' ? 'Despesa paga' : row.kind === 'bill_payment' ? 'Fatura paga' : row.kind === 'transfer_in' ? 'Transferência recebida' : 'Transferência enviada'} · {dateToDisplay(row.occurred_on)}</Text>
           {!!row.note && <Text style={{ color: palette.muted }}>{row.note}</Text>}
-          <Text style={{ color: (row.kind === 'transfer_out' || row.kind === 'expense' || row.kind === 'bill_payment') ? '#AA422E' : palette.green, fontWeight: '700' }}>{(row.kind === 'transfer_out' || row.kind === 'expense' || row.kind === 'bill_payment') ? '−' : '+'}{money(row.amount_cents)}</Text>
-          {thisMonth(row.occurred_on) && row.kind !== 'expense' && row.kind !== 'bill_payment' && <View style={{ flexDirection: 'row', gap: 18 }}>{<Text onPress={() => row.kind === 'income' ? startEdit(row) : void startEditTransfer(row)} style={{ color: palette.green }}>Editar</Text>}<Text onPress={() => remove(row)} style={{ color: '#AA422E' }}>{row.kind === 'income' ? 'Excluir' : 'Desfazer'}</Text></View>}
+          <Text style={{ color: (row.kind === 'transfer_out' || row.kind === 'expense' || row.kind === 'bill_payment') ? palette.danger : palette.green, fontWeight: '700' }}>{(row.kind === 'transfer_out' || row.kind === 'expense' || row.kind === 'bill_payment') ? '−' : '+'}{money(row.amount_cents)}</Text>
+          {thisMonth(row.occurred_on) && row.kind !== 'expense' && row.kind !== 'bill_payment' && <View style={{ flexDirection: 'row', gap: 18 }}>{<Text onPress={() => row.kind === 'income' ? startEdit(row) : void startEditTransfer(row)} style={{ color: palette.green }}>Editar</Text>}<Text onPress={() => remove(row)} style={{ color: palette.danger }}>{row.kind === 'income' ? 'Excluir' : 'Desfazer'}</Text></View>}
         </View>)}
       </Card>
     </>}

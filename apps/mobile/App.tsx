@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, AppState, BackHandler, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, AppState, BackHandler, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ExpenseForm } from './src/ExpenseForm';
@@ -15,20 +15,38 @@ import { ProjectionPanel } from './src/ProjectionPanel';
 import { MonthlyReport } from './src/MonthlyReport';
 import { request, Workspace } from './src/api';
 import { Account, Category, Expense, ExpenseInput, Subcategory, CreditCard, CardInstallment, CardPurchaseInput, FinancingInstallment, dateToDisplay, monthIso, paymentLabel } from './src/finance';
-import { Button, Card, palette } from './src/ui';
+import { applyTheme, Button, Card, palette, ThemeMode } from './src/ui';
+import { readThemePreference, saveThemePreference } from './src/themePreference';
+import { readOnboardingStep, saveOnboardingStep } from './src/onboardingProgress';
+import { FirstRunGuide } from './src/FirstRunGuide';
 
 type Tab = 'Resumo' | 'Contas' | 'Cartões' | 'Planejamento';
 export default function App() {
-  return <SafeAreaProvider><ToastProvider><View style={{ flex: 1 }}><AccessGate>{(workspace, token) =>
-    <Home key={workspace.id} workspace={workspace} token={token} />
+  const [theme, setTheme] = useState<ThemeMode>('light');
+  useEffect(() => { void readThemePreference().then(setTheme).catch(() => {}); }, []);
+  useEffect(() => { if (Platform.OS === 'web') document.title = 'Meu Controle'; }, []);
+  applyTheme(theme);
+  function toggleTheme() {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    void saveThemePreference(next).catch(() => {});
+  }
+  return <SafeAreaProvider><ToastProvider><View style={{ flex: 1, backgroundColor: palette.bg }}><StatusBar style={theme === 'dark' ? 'light' : 'dark'} /><AccessGate theme={theme} onToggleTheme={toggleTheme}>{(workspace, token, userId) =>
+    <Home key={`${workspace.id}:${userId}`} workspace={workspace} token={token} userId={userId} theme={theme} onToggleTheme={toggleTheme} />
   }</AccessGate><ToastViewport /></View></ToastProvider></SafeAreaProvider>;
 }
 
-function Home({ workspace, token }: { workspace: Workspace; token: string }) {
+type GuideAction = 'account' | 'card' | 'expense' | 'card-rule';
+function Home({ workspace, token, userId, theme, onToggleTheme }: { workspace: Workspace; token: string; userId: string; theme: ThemeMode; onToggleTheme: () => void }) {
+  const s = makeStyles();
   const root = `/workspaces/${workspace.id}`;
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [cards, setCards] = useState<CreditCard[]>([]);
+  const [rules, setRules] = useState<{kind: 'expense' | 'card'; active: boolean}[]>([]);
+  const [guideStep, setGuideStep] = useState<number | null>(null);
+  const [guideReady, setGuideReady] = useState(false);
+  const [guideAction, setGuideAction] = useState<{kind: GuideAction; id: number} | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [financed, setFinanced] = useState<FinancingInstallment[]>([]);
   const [tab, setTab] = useState<Tab>('Resumo');
@@ -49,6 +67,46 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
   const monthName = month.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   const monthTitle = monthName.charAt(0).toUpperCase() + monthName.slice(1);
   const currentMonth = monthIso(new Date());
+  const guideActive = guideStep !== null && guideStep < 4;
+  const guideExists = guideStep === 0 ? accounts.length > 0 : guideStep === 1 ? cards.length > 0 :
+    guideStep === 2 ? rules.some(rule => rule.active && rule.kind === 'expense') :
+    guideStep === 3 ? rules.some(rule => rule.active && rule.kind === 'card') : false;
+
+  useEffect(() => {
+    let active = true;
+    setGuideReady(false);
+    void readOnboardingStep(userId).then(step => { if (active) setGuideStep(step); })
+      .catch(() => { if (active) setGuideStep(null); })
+      .finally(() => { if (active) setGuideReady(true); });
+    return () => { active = false; };
+  }, [userId]);
+
+  function advanceGuide() {
+    if (guideStep === null) return;
+    const next = Math.min(4, guideStep + 1);
+    setGuideStep(next); setGuideAction(null); setTab('Resumo');
+    void saveOnboardingStep(userId, next).catch(() => setError('Não foi possível salvar o progresso do guia.'));
+  }
+  function finishGuide() {
+    setGuideStep(4); setGuideAction(null); setTab('Resumo');
+    void saveOnboardingStep(userId, 4).catch(() => setError('Não foi possível salvar o progresso do guia.'));
+  }
+  function reopenGuide() {
+    setGuideStep(0); setGuideAction(null); setTab('Resumo');
+    void saveOnboardingStep(userId, 0).catch(() => setError('Não foi possível salvar o progresso do guia.'));
+  }
+  function openGuideForm() {
+    if (guideStep === null) return;
+    const kind: GuideAction = guideStep === 0 ? 'account' : guideStep === 1 || (guideStep === 3 && cards.length === 0) ? 'card' : guideStep === 2 ? 'expense' : 'card-rule';
+    setGuideAction(value => ({ kind, id: (value?.id || 0) + 1 }));
+    setTab(kind === 'account' ? 'Contas' : kind === 'card' ? 'Cartões' : 'Planejamento');
+  }
+  function createdGuideItem(kind: GuideAction) {
+    setRefresh(value => value + 1);
+    if ((guideStep === 0 && kind === 'account') || (guideStep === 1 && kind === 'card') ||
+      (guideStep === 2 && kind === 'expense') || (guideStep === 3 && kind === 'card-rule')) advanceGuide();
+    else if (guideStep === 3 && kind === 'card') { setGuideAction(null); setTab('Resumo'); }
+  }
 
   useEffect(() => {
     let active = true;
@@ -59,11 +117,12 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
       request<Expense[]>(`${root}/expenses?month=${period}`, token),
       request<CardInstallment[]>(`${root}/card-installments?month=${period}`, token),
       request<CreditCard[]>(`${root}/cards`, token),
+      request<{kind: 'expense' | 'card'; active: boolean}[]>(`${root}/recurring-rules`, token),
       request<FinancingInstallment[]>(`${root}/invoice-financing-installments?month=${period}`, token),
       request<{id:string;kind:'expense'|'card';description:string;due_on:string;amount_cents:number;category_id:string;subcategory_id:string;payment_method:'pix'|'debit'|'cash'|null;expense_id:string|null}[]>(`${root}/recurring-occurrences?month=${period}`, token),
-    ]).then(([cats, accs, rows, installments, cardRows, financedRows, recurring]) => {
+    ]).then(([cats, accs, rows, installments, cardRows, ruleRows, financedRows, recurring]) => {
       if (!active) return;
-      setCategories(cats); setAccounts(accs); setCards(cardRows); setFinanced(financedRows);
+      setCategories(cats); setAccounts(accs); setCards(cardRows); setRules(ruleRows); setFinanced(financedRows);
       setExpenses([...rows, ...installments.map(item => ({
         id: item.id, account_id: '', category_id: item.category_id,
         subcategory_id: item.subcategory_id, amount_cents: item.amount_cents,
@@ -160,12 +219,25 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
   }
   const visible = expenses.filter(item => !detail || item.category_id === detail);
   return <SafeAreaView style={s.safe}>
-    <StatusBar style="dark" />
     <View style={s.shell}>
-      <View style={s.header}><View><Text style={s.brand}>financeiro<Text style={{ color: '#A9B883' }}>.</Text></Text><Text style={s.small}>Seu dinheiro, com clareza.</Text></View><View style={s.avatar}><Text style={s.avatarText}>F</Text></View></View>
-      <View style={s.demo}><View style={s.dot} /><Text style={s.demoText}>E10 · RELATÓRIO MENSAL</Text></View>
+      <View style={s.header}>
+        <Image source={require('./assets/meu-controle-icon-concept-v2.png')} accessibilityLabel="Ícone do Meu Controle" style={s.logo} />
+        <View style={{ flex: 1 }}><Text style={s.brand}>Meu Controle</Text><Text style={s.small}>Seu dinheiro, com clareza.</Text></View>
+        <Pressable accessibilityRole="switch" aria-checked={theme === 'dark'} accessibilityLabel="Modo escuro" onPress={onToggleTheme} style={s.themeToggle}>
+          <Text style={s.themeToggleText}>{theme === 'dark' ? '☀ Claro' : '☾ Escuro'}</Text>
+        </Pressable>
+      </View>
       <ScrollView contentContainerStyle={s.content}>
-        {tab === 'Resumo' ? <>
+        {!guideReady ? <Text style={s.small}>Preparando seu espaço…</Text> : <>
+        {!guideActive && tab === 'Resumo' && <Pressable accessibilityRole="button" accessibilityLabel="Abrir guia de primeiros passos" onPress={reopenGuide}>
+          <Text style={{ color: palette.green, fontWeight: '600' }}>Como começar? Ver guia de primeiros passos ›</Text>
+        </Pressable>}
+        {guideActive && guideStep !== null && (tab === 'Resumo' ?
+          <FirstRunGuide step={guideStep} exists={guideExists} hasCard={cards.length > 0}
+            onOpen={openGuideForm} onNext={advanceGuide} onFinish={finishGuide} /> :
+          <View style={{ gap: 6 }}><Text style={s.small}>PRIMEIROS PASSOS · ETAPA {guideStep + 1} DE 4</Text>
+            <Button label="Voltar ao guia" secondary onPress={() => { setGuideAction(null); setTab('Resumo'); }} /></View>)}
+        {tab === 'Resumo' ? guideActive ? null : <>
           <View style={s.month}><Pressable accessibilityRole="button" accessibilityLabel="Mês anterior" onPress={() => { setMonth(value => new Date(value.getFullYear(), value.getMonth() - 1, 1)); setNotice(''); }} style={s.arrow}><Text style={s.arrowText}>‹</Text></Pressable><Text style={s.monthText}>{monthTitle}</Text><Pressable accessibilityRole="button" accessibilityLabel="Próximo mês" onPress={() => { setMonth(value => new Date(value.getFullYear(), value.getMonth() + 1, 1)); setNotice(''); }} style={s.arrow}><Text style={s.arrowText}>›</Text></Pressable></View>
           <ProjectionPanel workspace={workspace} token={token} period={period} refresh={refresh} />
           <MonthlyReport workspace={workspace} token={token} period={period} />
@@ -202,7 +274,7 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
                 {item.forecast && <Text accessibilityRole="button" onPress={() => setTab('Planejamento')} style={{color:palette.green}}>Registrar pagamento no Planejamento</Text>}
                 {!item.forecast && item.payment_method !== 'credit' && item.occurred_on.slice(0, 7) === currentMonth && <View style={{ flexDirection: 'row', gap: 16 }}>
                   <Text accessibilityRole="button" onPress={() => { setEditing(item); setForm(true); }} style={{ color: palette.green }}>Editar</Text>
-                  <Text accessibilityRole="button" onPress={() => confirmAction('Excluir despesa?', () => removeExpense(item))} style={{ color: '#AA422E' }}>Excluir</Text>
+                  <Text accessibilityRole="button" onPress={() => confirmAction('Excluir despesa?', () => removeExpense(item))} style={{ color: palette.danger }}>Excluir</Text>
                 </View>}
               </View><Text style={s.itemValue}>{money(item.amount_cents)}</Text>
             </View>;
@@ -218,11 +290,20 @@ function Home({ workspace, token }: { workspace: Workspace; token: string }) {
               </View><Text style={s.itemValue}>{money(item.amount_cents)}</Text>
             </View>)}</Card>
           </>}
-        </> : tab === 'Contas' ? <AccountsPanel workspace={workspace} token={token} /> : tab === 'Cartões' ? <>
-          <CardPanel workspace={workspace} token={token} refresh={() => setRefresh(value => value + 1)} />
-        </> : <PlanningPanel workspace={workspace} token={token} period={period} refresh={refresh} onChanged={() => setRefresh(value => value + 1)} />}
+        </> : tab === 'Contas' ? <AccountsPanel workspace={workspace} token={token}
+          startCreateRequest={guideAction?.kind === 'account' ? guideAction.id : undefined}
+          onCreated={() => createdGuideItem('account')} /> : tab === 'Cartões' ? <>
+          <CardPanel workspace={workspace} token={token} refresh={() => setRefresh(value => value + 1)}
+            startCreateRequest={guideAction?.kind === 'card' ? guideAction.id : undefined}
+            onCreated={() => createdGuideItem('card')} />
+        </> : <PlanningPanel workspace={workspace} token={token} period={period} refresh={refresh}
+          onChanged={() => setRefresh(value => value + 1)}
+          startCreate={guideAction?.kind === 'expense' ? 'expense' : guideAction?.kind === 'card-rule' ? 'card' : undefined}
+          startCreateRequest={guideAction?.id}
+          onCreated={kind => createdGuideItem(kind === 'card' ? 'card-rule' : 'expense')} />}
+        </>}
       </ScrollView>
-      <Pressable accessibilityRole="button" accessibilityLabel="Adicionar despesa" onPress={() => { void openNewExpense(); }} style={({ pressed }) => [s.fab, pressed && { opacity: 0.8 }]}><Text style={s.fabText}>+</Text></Pressable>
+      {!guideActive && <Pressable accessibilityRole="button" accessibilityLabel="Adicionar despesa" onPress={() => { void openNewExpense(); }} style={({ pressed }) => [s.fab, pressed && { opacity: 0.8 }]}><Text style={s.fabText}>+</Text></Pressable>}
       <View style={s.nav}>{(['Resumo', 'Contas', 'Cartões', 'Planejamento'] as Tab[]).map((item, index) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => { setTab(item); setDetail(null); if (item === 'Resumo') setRefresh(value => value + 1); }} style={s.navItem}><View style={[s.navIcon, tab === item && s.navActive]}><Text style={[s.navSymbol, tab === item && { color: palette.green }]}>{['▥', '▤', '▱', '◷'][index]}</Text></View><Text style={[s.navLabel, tab === item && { color: palette.green, fontWeight: '700' }]}>{item}</Text></Pressable>)}</View>
     </View>
     {form && <Modal visible animationType="slide" onRequestClose={() => setForm(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ExpenseForm key={editing?.id || 'new'} initial={editing} categories={categories} accounts={accounts} cards={cards} onCreditSave={saveCredit} onCategory={addCategory} onSubcategory={addSubcategory} onSave={saveExpense} onCancel={() => { setForm(false); setEditing(undefined); }} /></View><ToastViewport bottom={24} /></SafeAreaView></Modal>}
@@ -272,23 +353,23 @@ function CategoryActionRow({ label, action, onAction, nested = false, inactive =
 }
 
 function Bar({ label, value, total, color, onPress }: { label: string; value: number; total: number; color: string; onPress?: () => void }) {
+  const s = makeStyles();
   const content = <><View style={s.barHeading}><Text style={s.itemTitle}>{label}</Text><Text style={s.itemValue}>{money(value)}{onPress ? '  ›' : ''}</Text></View><View style={s.track}><View style={{ width: `${total ? value / total * 100 : 0}%`, backgroundColor: color, height: 9, borderRadius: 5 }} /></View></>;
   return onPress ? <Pressable accessibilityRole="button" accessibilityLabel={`${label}, ${money(value)}, ver subcategorias`} onPress={onPress} style={s.bar}>{content}</Pressable> : <View style={s.bar}>{content}</View>;
 }
 
-const s = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: palette.bg }, shell: { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' }, formShell: { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' },
-  header: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  brand: { fontSize: 28, fontWeight: '800', letterSpacing: -1, color: palette.ink }, small: { fontSize: 12, color: palette.muted, lineHeight: 18 },
-  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#E5EBDD', alignItems: 'center', justifyContent: 'center' }, avatarText: { fontWeight: '700', color: palette.green },
-  demo: { backgroundColor: '#E9ECDD', paddingVertical: 9, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 8 }, dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#637B47' }, demoText: { fontSize: 10, letterSpacing: 1.2, color: '#4E633D', fontWeight: '700' },
+  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  logo: { width: 48, height: 48, borderRadius: 13 }, themeToggle: { minHeight: 44, paddingHorizontal: 10, borderRadius: 12, backgroundColor: palette.soft, justifyContent: 'center' }, themeToggleText: { color: palette.ink, fontSize: 12, fontWeight: '700' },
+  brand: { fontSize: 23, fontWeight: '800', letterSpacing: -1, color: palette.ink }, small: { fontSize: 12, color: palette.muted, lineHeight: 18 },
   content: { padding: 24, gap: 18, paddingBottom: 105 }, month: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, monthText: { fontWeight: '600', fontSize: 16, color: palette.ink },
-  arrow: { width: 44, height: 44, borderWidth: 1, borderColor: palette.line, borderRadius: 14, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white' }, arrowText: { fontSize: 26, color: palette.green },
-  hero: { borderRadius: 24, backgroundColor: palette.green, padding: 24, gap: 10 }, heroLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.8, color: '#D5E2C4' }, heroValue: { fontSize: 38, fontWeight: '700', color: 'white', letterSpacing: -1 }, heroDivider: { height: 1, backgroundColor: '#4C7766', marginVertical: 4 }, heroCaption: { fontSize: 13, lineHeight: 20, color: '#E6EEE1' }, heroFoot: { color: '#DAE6D0', fontSize: 10, lineHeight: 16 },
+  arrow: { width: 44, height: 44, borderWidth: 1, borderColor: palette.line, borderRadius: 14, justifyContent: 'center', alignItems: 'center', backgroundColor: palette.white }, arrowText: { fontSize: 26, color: palette.green },
+  hero: { borderRadius: 24, backgroundColor: '#285B49', padding: 24, gap: 10 }, heroLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.8, color: '#D5E2C4' }, heroValue: { fontSize: 38, fontWeight: '700', color: 'white', letterSpacing: -1 }, heroDivider: { height: 1, backgroundColor: '#4C7766', marginVertical: 4 }, heroCaption: { fontSize: 13, lineHeight: 20, color: '#E6EEE1' }, heroFoot: { color: '#DAE6D0', fontSize: 10, lineHeight: 16 },
   section: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }, sectionTitle: { color: palette.ink, fontSize: 17, fontWeight: '700' },
-  bar: { paddingVertical: 10, gap: 10, minHeight: 58 }, barHeading: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 }, track: { height: 9, borderRadius: 5, backgroundColor: '#F0F1EB', overflow: 'hidden' }, itemTitle: { color: palette.ink, fontWeight: '600', fontSize: 14 }, itemValue: { color: palette.ink, fontWeight: '600', fontSize: 13 },
-  transaction: { flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: '#F0F1EB', paddingVertical: 10 }, transactionDot: { width: 8, height: 8, borderRadius: 4 },
-  footerNote: { fontSize: 12, color: palette.muted, textAlign: 'center', lineHeight: 19 }, fab: { position: 'absolute', right: 24, bottom: 100, width: 58, height: 58, borderRadius: 19, backgroundColor: palette.green, alignItems: 'center', justifyContent: 'center', elevation: 5, boxShadow: '0 4px 12px #20362f25' }, fabText: { fontSize: 34, lineHeight: 40, color: 'white' },
-  nav: { flexDirection: 'row', borderTopWidth: 1, borderColor: palette.line, backgroundColor: palette.bg, paddingVertical: 8 }, navItem: { flex: 1, alignItems: 'center', gap: 4, minHeight: 62 }, navIcon: { width: 58, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 14 }, navActive: { backgroundColor: '#E4EBDC' }, navSymbol: { fontSize: 23, color: palette.muted }, navLabel: { fontSize: 12, color: palette.muted },
+  bar: { paddingVertical: 10, gap: 10, minHeight: 58 }, barHeading: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 }, track: { height: 9, borderRadius: 5, backgroundColor: palette.track, overflow: 'hidden' }, itemTitle: { color: palette.ink, fontWeight: '600', fontSize: 14 }, itemValue: { color: palette.ink, fontWeight: '600', fontSize: 13 },
+  transaction: { flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: palette.line, paddingVertical: 10 }, transactionDot: { width: 8, height: 8, borderRadius: 4 },
+  footerNote: { fontSize: 12, color: palette.muted, textAlign: 'center', lineHeight: 19 }, fab: { position: 'absolute', right: 24, bottom: 100, width: 58, height: 58, borderRadius: 19, backgroundColor: palette.green, alignItems: 'center', justifyContent: 'center', elevation: 5, boxShadow: '0 4px 12px #20362f25' }, fabText: { fontSize: 34, lineHeight: 40, color: palette.bg },
+  nav: { flexDirection: 'row', borderTopWidth: 1, borderColor: palette.line, backgroundColor: palette.bg, paddingVertical: 8 }, navItem: { flex: 1, alignItems: 'center', gap: 4, minHeight: 62 }, navIcon: { width: 58, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 14 }, navActive: { backgroundColor: palette.soft }, navSymbol: { fontSize: 23, color: palette.muted }, navLabel: { fontSize: 12, color: palette.muted },
   pageTitle: { fontSize: 28, color: palette.ink, fontWeight: '700' }, description: { fontSize: 14, lineHeight: 23, color: palette.muted }, bankCard: { padding: 24, gap: 24, backgroundColor: palette.ink, borderRadius: 24 }, bankName: { fontSize: 24, color: 'white', fontWeight: '600' }, bankDates: { flexDirection: 'row', justifyContent: 'space-between' }, bankDate: { color: 'white', fontWeight: '600', marginTop: 5 }, empty: { paddingVertical: 18, gap: 12 },
 });

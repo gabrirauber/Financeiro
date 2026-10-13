@@ -17,6 +17,7 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
   onSubcategory: (id: string, name: string) => Promise<Subcategory>;
   initial?: Expense;
 }) {
+  const s = makeStyles();
   const [amount, setAmount] = useState(initial ? (initial.amount_cents / 100).toFixed(2).replace('.', ',') : '');
   const [category, setCategory] = useState(initial?.category_id || '');
   const [subcategory, setSubcategory] = useState(initial?.subcategory_id || '');
@@ -108,11 +109,11 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
     </ScrollView>
   </KeyboardAvoidingView>;
 }
-const s = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   content: { padding: 24, gap: 12, paddingBottom: 40 }, title: { fontSize: 30, fontWeight: '700', color: palette.ink, marginVertical: 8 },
   eyebrow: { color: palette.green, fontSize: 12, letterSpacing: 2, fontWeight: '700' }, hint: { color: palette.muted, fontSize: 13, lineHeight: 20 },
   label: { color: palette.ink, fontSize: 15, fontWeight: '600', marginTop: 10 }, wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  input: { borderColor: palette.line, borderWidth: 1, backgroundColor: 'white', borderRadius: 14, padding: 15, fontSize: 16, color: palette.ink },
+  input: { borderColor: palette.line, borderWidth: 1, backgroundColor: palette.white, borderRadius: 14, padding: 15, fontSize: 16, color: palette.ink },
   amountRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: palette.green, paddingVertical: 8 },
   currency: { fontSize: 25, color: palette.muted, marginRight: 12 }, amount: { fontSize: 40, color: palette.ink, flex: 1, minHeight: 64 },
 });

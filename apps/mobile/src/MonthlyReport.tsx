@@ -70,7 +70,7 @@ export function MonthlyReport({ workspace, token, period }: {
       onPress={() => setDetail(value => !value)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 }}>
       <View style={{ width: 22, height: 22, borderWidth: 1.5, borderColor: palette.green,
         borderRadius: 5, backgroundColor: detail ? palette.green : 'transparent', alignItems: 'center' }}>
-        {detail && <Text style={{ color: 'white', fontWeight: '700' }}>✓</Text>}
+        {detail && <Text style={{ color: palette.bg, fontWeight: '700' }}>✓</Text>}
       </View>
       <Text style={{ color: palette.ink, flex: 1 }}>Incluir lançamentos detalhados</Text>
     </Pressable>
