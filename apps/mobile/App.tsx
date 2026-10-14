@@ -201,7 +201,8 @@ function Home({ workspace, token, userId, theme, onToggleTheme, onOpenMembers, o
   async function saveExpense(input: ExpenseInput) {
     await request(`${root}/expenses${editing ? '/' + editing.id : ''}`, token, editing ? 'PATCH' : 'POST', input);
     const wasEditing = !!editing;
-    setForm(false); setEditing(undefined); setDetail(null); setTab('Resumo');
+    setForm(false); setEditing(undefined); setDetail(null);
+    if (tab !== 'Contas') setTab('Resumo');
     const [year, number] = input.occurred_on.slice(0, 7).split('-').map(Number);
     setMonth(new Date(year, number - 1, 1));
     setRefresh(value => value + 1);
@@ -303,6 +304,9 @@ function Home({ workspace, token, userId, theme, onToggleTheme, onOpenMembers, o
             </View>)}</Card>
           </>}
         </> : tab === 'Contas' ? <AccountsPanel workspace={workspace} token={token}
+          refresh={refresh}
+          onEditExpense={expense => { setEditing(expense); setForm(true); }}
+          onChanged={() => setRefresh(value => value + 1)}
           startCreateRequest={guideAction?.kind === 'account' ? guideAction.id : undefined}
           onCreated={() => createdGuideItem('account')} /> : tab === 'Cartões' ? <>
           <CardPanel workspace={workspace} token={token} refresh={() => setRefresh(value => value + 1)}

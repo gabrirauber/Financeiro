@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import case, func, select
 
-from app.finance.models import Account, Movement
+from app.finance.models import Account, Expense, Movement
 from app.identity.dependencies import CurrentUser, Db
 from app.identity.workspaces import require_member
 
@@ -149,6 +149,29 @@ def statement(workspace_id: UUID, account_id: UUID, db: Db, user: CurrentUser):
         .where(Movement.workspace_id == workspace_id, Movement.account_id == account.id)
         .order_by(Movement.occurred_on.desc(), Movement.created_at.desc(), Movement.id.desc())
     ).all()
+    expenses = {
+        expense.movement_id: expense
+        for expense in db.scalars(
+            select(Expense).where(Expense.movement_id.in_([row.id for row in rows]))
+        ).all()
+    } if rows else {}
+    from app.finance.card_models import Invoice, InvoiceAdvance, InvoiceFinancing
+
+    payment_ids = [row.id for row in rows if row.kind == "bill_payment"]
+    advance_ids = set(db.scalars(
+        select(InvoiceAdvance.movement_id).where(InvoiceAdvance.movement_id.in_(payment_ids))
+    ).all()) if payment_ids else set()
+    invoice_by_payment = {
+        invoice.payment_movement_id: invoice.id
+        for invoice in db.scalars(
+            select(Invoice).where(Invoice.payment_movement_id.in_(payment_ids))
+        ).all()
+    } if payment_ids else {}
+    partial_invoices = set(db.scalars(
+        select(InvoiceFinancing.source_invoice_id).where(
+            InvoiceFinancing.source_invoice_id.in_(invoice_by_payment.values())
+        )
+    ).all()) if invoice_by_payment else set()
     return [
         {
             "id": row.id,
@@ -157,6 +180,17 @@ def statement(workspace_id: UUID, account_id: UUID, db: Db, user: CurrentUser):
             "occurred_on": row.occurred_on,
             "note": row.note,
             "transfer_id": row.transfer_id,
+            "payment_kind": (
+                "advance" if row.id in advance_ids else
+                "partial" if invoice_by_payment.get(row.id) in partial_invoices else
+                "full" if row.id in invoice_by_payment else None
+            ),
+            "expense": {
+                "id": expenses[row.id].id,
+                "category_id": expenses[row.id].category_id,
+                "subcategory_id": expenses[row.id].subcategory_id,
+                "payment_method": expenses[row.id].payment_method,
+            } if row.id in expenses else None,
         }
         for row in rows
     ]

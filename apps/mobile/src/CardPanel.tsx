@@ -258,11 +258,10 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
             onPress={() => startCorrection(item.purchase_id)} />}
           {editingPurchase === item.purchase_id && <Card>
             <Text style={label()}>Corrigir parcelas não pagas</Text>
-            <Text style={muted()}>Informe o valor total restante. O app redistribui entre os meses atuais e futuros; faturas pagas e meses anteriores permanecem intactos.</Text>
-            <MoneyInput accessibilityLabel="Total restante das parcelas" style={input()} autoFocus
+            <Text style={muted()}>Digite o novo total das parcelas atuais e futuras. O app redistribui esse valor; faturas pagas e meses anteriores permanecem intactos.</Text>
+            <Text style={label()}>Novo total restante (R$)</Text>
+            <MoneyInput accessibilityLabel="Novo total restante das parcelas" style={input()} autoFocus
               value={remainingAmount} onChangeText={setRemainingAmount} />
-            <TextInput accessibilityLabel="Observação das parcelas restantes" style={input()}
-              value={remainingNote} onChangeText={setRemainingNote} maxLength={200} />
             <Button label={busy ? 'Salvando…' : 'Salvar correção'}
               onPress={() => { if (!busy) void saveCorrection(); }} />
             <Button label="Cancelar" secondary onPress={() => setEditingPurchase(undefined)} />

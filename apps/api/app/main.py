@@ -19,6 +19,7 @@ from app.finance import (
     expenses,
     financing,
     income_plans,
+    payment_corrections,
     projection,
     recurrences,
     reports,
@@ -88,6 +89,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(cards.router)
     app.include_router(financing.router)
     app.include_router(advances.router)
+    app.include_router(payment_corrections.router)
     app.include_router(recurrences.router)
     app.include_router(income_plans.router)
     app.include_router(projection.router)
