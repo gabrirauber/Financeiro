@@ -258,3 +258,7 @@ E03 enviada ao remoto com autorização do cliente. E04 implementada na branch l
 ## Atualização em 09/10/2026 — E05
 
 E04 enviada ao remoto com autorização do cliente. E05 implementada na branch local etapa/05-despesas-pagas-grafico-real: categorias e subcategorias persistentes por espaço, despesas pagas com atualização de saldo e painel mensal real. Aguarda revisão e autorização antes do push. Ver [revisão E05](revisao-e05.md). Esta atualização substitui os status anteriores.
+
+## Atualização em 13/10/2026 — E11
+
+E10 e os ajustes de identidade visual, tema escuro e guia inicial foram enviados ao remoto com autorização do cliente. A E11 prepara servidor exclusivo no Railway e APK Android de teste, sem publicação na Play Store. O deploy automático está desativado; as mudanças da E11 ficam locais para code review antes de qualquer push. Testes integrados e restauração de backup de teste constam em [revisão E11](revisao-e11.md).

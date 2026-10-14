@@ -1,6 +1,8 @@
 # Railway — preparação da E02
 
-Status: configuração pronta para revisão, sem publicação. Usar um ambiente de teste separado de produção.
+Atualização E11: o ambiente do Meu Controle foi criado e a API está ativa no Railway; veja [revisão E11](revisao-e11.md). O roteiro abaixo registra a preparação original da E02.
+
+Status na E02: configuração pronta para revisão, sem publicação. Usar um ambiente de teste separado de produção.
 
 1. Após code review e autorização de push/publicação, criar serviço da API no Railway ligado ao repositório Financeiro.
 2. Definir Root Directory como `/apps/api` e o caminho do arquivo de configuração como `/apps/api/railway.json`. O Dockerfile é relativo à raiz do serviço.
