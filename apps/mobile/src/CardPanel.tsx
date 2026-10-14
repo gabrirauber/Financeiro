@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Switch, Text, TextInput, View } from 'react-native';
 import { request, Workspace } from './api';
-import { Account, Category, CreditCard, Invoice, dateToDisplay, dateToIso, monthIso } from './finance';
+import { Account, Category, CreditCard, Invoice, Subcategory, dateToDisplay, dateToIso, monthIso } from './finance';
 import { localDate, money, parseCents } from './prototype';
+import { MoneyInput } from './MoneyInput';
+import { CategoryCreator } from './CategoryCreator';
 import { Button, Card, Chip, palette } from './ui';
 import { useToastSetter } from './Toast';
 
@@ -24,11 +26,12 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
   const [showCreate, setShowCreate] = useState(false);
   const [editingCard, setEditingCard] = useState<string>();
   const [legacyCard, setLegacyCard] = useState<string>();
-  const [legacyAmount, setLegacyAmount] = useState('200,00');
+  const [legacyAmount, setLegacyAmount] = useState('');
   const [legacyCount, setLegacyCount] = useState('');
   const [legacyCategory, setLegacyCategory] = useState('');
   const [legacySubcategory, setLegacySubcategory] = useState('');
   const [legacyNote, setLegacyNote] = useState('');
+  const selectedLegacyCategory = categories.find(item => item.id === legacyCategory);
   const [name, setName] = useState('');
   const [closing, setClosing] = useState('10');
   const [due, setDue] = useState('20');
@@ -90,8 +93,20 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
   }
   function startLegacy(card: CreditCard) {
     setLegacyCard(card.id); cancelCardForm();
-    setLegacyAmount('200,00'); setLegacyCount(''); setLegacyCategory(''); setLegacySubcategory('');
+    setLegacyAmount(''); setLegacyCount(''); setLegacyCategory(''); setLegacySubcategory('');
     setLegacyNote(''); setError('');
+  }
+  async function createLegacyCategory(name: string) {
+    const created = await request<Category>(`${root}/categories`, token, 'POST', { name });
+    setCategories(items => [...items, created].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
+    setLegacyCategory(created.id); setLegacySubcategory('');
+  }
+  async function createLegacySubcategory(name: string) {
+    if (!selectedLegacyCategory) return;
+    const created = await request<Subcategory>(`${root}/categories/${selectedLegacyCategory.id}/subcategories`, token, 'POST', { name });
+    setCategories(items => items.map(item => item.id === selectedLegacyCategory.id ?
+      { ...item, subcategories: [...item.subcategories, created].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')) } : item));
+    setLegacySubcategory(created.id);
   }
   async function saveLegacy() {
     const cents = parseCents(legacyAmount);
@@ -241,6 +256,17 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
           <Text style={muted()}>{dateToDisplay(item.purchased_on)} · {money(item.amount_cents)}</Text>
           {!item.invoice_paid && <Button secondary label="Corrigir parcelas atuais e futuras"
             onPress={() => startCorrection(item.purchase_id)} />}
+          {editingPurchase === item.purchase_id && <Card>
+            <Text style={label()}>Corrigir parcelas não pagas</Text>
+            <Text style={muted()}>Informe o valor total restante. O app redistribui entre os meses atuais e futuros; faturas pagas e meses anteriores permanecem intactos.</Text>
+            <MoneyInput accessibilityLabel="Total restante das parcelas" style={input()} autoFocus
+              value={remainingAmount} onChangeText={setRemainingAmount} />
+            <TextInput accessibilityLabel="Observação das parcelas restantes" style={input()}
+              value={remainingNote} onChangeText={setRemainingNote} maxLength={200} />
+            <Button label={busy ? 'Salvando…' : 'Salvar correção'}
+              onPress={() => { if (!busy) void saveCorrection(); }} />
+            <Button label="Cancelar" secondary onPress={() => setEditingPurchase(undefined)} />
+          </Card>}
         </View>)}
       </Card>
       {current.status === 'open' && current.remaining_cents > 0 && <Card>
@@ -250,24 +276,13 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{accounts.filter(a => a.kind === 'bank').map(a =>
             <Chip key={a.id} label={a.name} selected={payAccount === a.id} onPress={() => setPayAccount(a.id)} />)}</View>
           <Text style={label()}>Valor a antecipar *</Text>
-          <TextInput accessibilityLabel="Valor da antecipação" style={input()} value={advanceAmount}
-            onChangeText={setAdvanceAmount} keyboardType="decimal-pad" />
+          <MoneyInput accessibilityLabel="Valor da antecipação" style={input()} value={advanceAmount}
+            onChangeText={setAdvanceAmount} />
           <Text style={muted()}>Saldo atual da fatura: {money(current.remaining_cents)}. O valor informado sai da conta agora.</Text>
           <Button label={busy ? 'Registrando…' : 'Confirmar antecipação'}
             onPress={() => { if (!busy) void advance(current); }} />
           <Button label="Cancelar" secondary onPress={() => { setAdvanceOpen(false); setError(''); }} />
         </>}
-      </Card>}
-      {editingPurchase && <Card>
-        <Text style={label()}>Corrigir parcelas não pagas</Text>
-        <Text style={muted()}>Informe o valor total restante. O app redistribui entre os meses atuais e futuros; faturas pagas e meses anteriores permanecem intactos.</Text>
-        <TextInput accessibilityLabel="Total restante das parcelas" style={input()}
-          keyboardType="decimal-pad" value={remainingAmount} onChangeText={setRemainingAmount} />
-        <TextInput accessibilityLabel="Observação das parcelas restantes" style={input()}
-          value={remainingNote} onChangeText={setRemainingNote} maxLength={200} />
-        <Button label={busy ? 'Salvando…' : 'Salvar correção'}
-          onPress={() => { if (!busy) void saveCorrection(); }} />
-        <Button label="Cancelar" secondary onPress={() => setEditingPurchase(undefined)} />
       </Card>}
       {current.status === 'closed' && <Card>
         <Text style={label()}>Pagar fatura integral</Text>
@@ -280,11 +295,11 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
           onPress={() => { setPartialOpen(true); setPartialAmount(centsToInput(Math.min(60000, Math.floor(current.remaining_cents / 2)))); setError(''); }} />
         {partialOpen && <>
           <Text style={label()}>Valor pago agora *</Text>
-          <TextInput accessibilityLabel="Valor do pagamento parcial" style={input()} value={partialAmount}
-            onChangeText={setPartialAmount} keyboardType="decimal-pad" />
+          <MoneyInput accessibilityLabel="Valor do pagamento parcial" style={input()} value={partialAmount}
+            onChangeText={setPartialAmount} />
           <Text style={label()}>Juros e encargos totais *</Text>
-          <TextInput accessibilityLabel="Juros e encargos do financiamento" style={input()} value={partialFees}
-            onChangeText={setPartialFees} keyboardType="decimal-pad" placeholder="0,00" />
+          <MoneyInput accessibilityLabel="Juros e encargos do financiamento" style={input()} value={partialFees}
+            onChangeText={setPartialFees} placeholder="0,00" />
           <Text style={label()}>Número de parcelas futuras *</Text>
           <TextInput accessibilityLabel="Número de parcelas do financiamento" style={input()} value={partialCount}
             onChangeText={setPartialCount} keyboardType="number-pad" maxLength={3} />
@@ -317,8 +332,8 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
           <Text style={label()}>Parcelas antigas · {card.name}</Text>
           <Text style={muted()}>Informe o valor de cada parcela e quantas faltam. A primeira entra na fatura de {monthIso(new Date()).split('-').reverse().join('/')}.</Text>
           <Text style={label()}>Valor de cada parcela *</Text>
-          <TextInput accessibilityLabel="Valor de cada parcela antiga" style={input()} value={legacyAmount}
-            onChangeText={setLegacyAmount} keyboardType="decimal-pad" />
+          <MoneyInput accessibilityLabel="Valor de cada parcela antiga" style={input()} value={legacyAmount}
+            onChangeText={setLegacyAmount} />
           <Text style={label()}>Quantidade de parcelas restantes *</Text>
           <TextInput accessibilityLabel="Quantidade de parcelas restantes" style={input()} value={legacyCount}
             onChangeText={setLegacyCount} keyboardType="number-pad" maxLength={3} />
@@ -326,11 +341,13 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{categories.filter(item => item.active).map(item =>
             <Chip key={item.id} label={item.name} selected={legacyCategory === item.id}
               onPress={() => { setLegacyCategory(item.id); setLegacySubcategory(''); }} />)}</View>
+          <CategoryCreator kind="categoria" existing={categories.map(item => item.name)} onCreate={createLegacyCategory} />
           <Text style={label()}>Subcategoria *</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{categories.find(item => item.id === legacyCategory)
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{selectedLegacyCategory
             ?.subcategories.filter(item => item.active).map(item =>
               <Chip key={item.id} label={item.name} selected={legacySubcategory === item.id}
                 onPress={() => setLegacySubcategory(item.id)} />)}</View>
+          {selectedLegacyCategory?.active && <CategoryCreator key={selectedLegacyCategory.id} kind="subcategoria" existing={selectedLegacyCategory.subcategories.map(item => item.name)} onCreate={createLegacySubcategory} />}
           <Text style={label()}>Observação (opcional)</Text>
           <TextInput accessibilityLabel="Observação da compra antiga" style={input()} value={legacyNote}
             onChangeText={setLegacyNote} maxLength={200} placeholder="Ex.: Compra antiga" />

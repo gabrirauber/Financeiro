@@ -19,6 +19,7 @@ import { applyTheme, Button, Card, palette, ThemeMode } from './src/ui';
 import { readThemePreference, saveThemePreference } from './src/themePreference';
 import { readOnboardingStep, saveOnboardingStep } from './src/onboardingProgress';
 import { FirstRunGuide } from './src/FirstRunGuide';
+import { chartColor, PieChart, PieSegment } from './src/PieChart';
 
 type Tab = 'Resumo' | 'Contas' | 'Cartões' | 'Planejamento';
 export default function App() {
@@ -31,13 +32,13 @@ export default function App() {
     setTheme(next);
     void saveThemePreference(next).catch(() => {});
   }
-  return <SafeAreaProvider><ToastProvider><View style={{ flex: 1, backgroundColor: palette.bg }}><StatusBar style={theme === 'dark' ? 'light' : 'dark'} /><AccessGate theme={theme} onToggleTheme={toggleTheme}>{(workspace, token, userId) =>
-    <Home key={`${workspace.id}:${userId}`} workspace={workspace} token={token} userId={userId} theme={theme} onToggleTheme={toggleTheme} />
+  return <SafeAreaProvider><ToastProvider><View style={{ flex: 1, backgroundColor: palette.bg }}><StatusBar style={theme === 'dark' ? 'light' : 'dark'} /><AccessGate theme={theme} onToggleTheme={toggleTheme}>{(workspace, token, userId, openMembers, logout) =>
+    <Home key={`${workspace.id}:${userId}`} workspace={workspace} token={token} userId={userId} theme={theme} onToggleTheme={toggleTheme} onOpenMembers={openMembers} onLogout={logout} />
   }</AccessGate><ToastViewport /></View></ToastProvider></SafeAreaProvider>;
 }
 
 type GuideAction = 'account' | 'card' | 'expense' | 'card-rule';
-function Home({ workspace, token, userId, theme, onToggleTheme }: { workspace: Workspace; token: string; userId: string; theme: ThemeMode; onToggleTheme: () => void }) {
+function Home({ workspace, token, userId, theme, onToggleTheme, onOpenMembers, onLogout }: { workspace: Workspace; token: string; userId: string; theme: ThemeMode; onToggleTheme: () => void; onOpenMembers: () => void; onLogout: () => void }) {
   const s = makeStyles();
   const root = `/workspaces/${workspace.id}`;
   const [categories, setCategories] = useState<Category[]>([]);
@@ -55,6 +56,8 @@ function Home({ workspace, token, userId, theme, onToggleTheme }: { workspace: W
   const [form, setForm] = useState(false);
   const [editing, setEditing] = useState<Expense>();
   const [manageCategories, setManageCategories] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const setNotice = useToastSetter('success');
   const setError = useToastSetter('error');
   const [loading, setLoading] = useState(true);
@@ -91,10 +94,6 @@ function Home({ workspace, token, userId, theme, onToggleTheme }: { workspace: W
     setGuideStep(4); setGuideAction(null); setTab('Resumo');
     void saveOnboardingStep(userId, 4).catch(() => setError('Não foi possível salvar o progresso do guia.'));
   }
-  function reopenGuide() {
-    setGuideStep(0); setGuideAction(null); setTab('Resumo');
-    void saveOnboardingStep(userId, 0).catch(() => setError('Não foi possível salvar o progresso do guia.'));
-  }
   function openGuideForm() {
     if (guideStep === null) return;
     const kind: GuideAction = guideStep === 0 ? 'account' : guideStep === 1 || (guideStep === 3 && cards.length === 0) ? 'card' : guideStep === 2 ? 'expense' : 'card-rule';
@@ -103,7 +102,8 @@ function Home({ workspace, token, userId, theme, onToggleTheme }: { workspace: W
   }
   function createdGuideItem(kind: GuideAction) {
     setRefresh(value => value + 1);
-    if ((guideStep === 0 && kind === 'account') || (guideStep === 1 && kind === 'card') ||
+    if (guideStep === 0 && kind === 'account') { setGuideAction(null); setTab('Resumo'); }
+    else if ((guideStep === 1 && kind === 'card') ||
       (guideStep === 2 && kind === 'expense') || (guideStep === 3 && kind === 'card-rule')) advanceGuide();
     else if (guideStep === 3 && kind === 'card') { setGuideAction(null); setTab('Resumo'); }
   }
@@ -142,12 +142,13 @@ function Home({ workspace, token, userId, theme, onToggleTheme }: { workspace: W
 
   useEffect(() => {
     const listener = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (menuOpen) { setMenuOpen(false); return true; }
       if (detail) { setDetail(null); return true; }
       if (tab !== 'Resumo') { setTab('Resumo'); return true; }
       return false;
     });
     return () => listener.remove();
-  }, [detail, tab]);
+  }, [detail, tab, menuOpen]);
   useEffect(() => {
     const listener = AppState.addEventListener('change', state => {
       if (state === 'active') setRefresh(value => value + 1);
@@ -218,9 +219,24 @@ function Home({ workspace, token, userId, theme, onToggleTheme }: { workspace: W
     setNotice('Despesa excluída. O valor voltou ao saldo da conta.');
   }
   const visible = expenses.filter(item => !detail || item.category_id === detail);
+  const chartSegments: PieSegment[] = category ? category.subcategories.map((sub, index) => ({
+    id: sub.id, label: sub.name, color: chartColor(index, theme),
+    value: visible.filter(item => item.subcategory_id === sub.id).reduce((sum, item) => sum + item.amount_cents, 0),
+  })) : [
+    ...categories.map((item, index) => ({
+      id: item.id, label: item.name, color: chartColor(index, theme),
+      value: expenses.filter(row => row.category_id === item.id).reduce((sum, row) => sum + row.amount_cents, 0),
+      onPress: () => setDetail(item.id),
+    })),
+    ...(financedTotal ? [{ id: 'financed', label: 'Faturas parceladas', value: financedTotal,
+      color: chartColor(categories.length, theme) }] : []),
+  ];
   return <SafeAreaView style={s.safe}>
     <View style={s.shell}>
       <View style={s.header}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Abrir menu" onPress={() => setMenuOpen(true)} style={s.menuButton}>
+          <Text style={s.menuIcon}>☰</Text>
+        </Pressable>
         <Image source={require('./assets/meu-controle-icon-concept-v2.png')} accessibilityLabel="Ícone do Meu Controle" style={s.logo} />
         <View style={{ flex: 1 }}><Text style={s.brand}>Meu Controle</Text><Text style={s.small}>Seu dinheiro, com clareza.</Text></View>
         <Pressable accessibilityRole="switch" aria-checked={theme === 'dark'} accessibilityLabel="Modo escuro" onPress={onToggleTheme} style={s.themeToggle}>
@@ -229,9 +245,6 @@ function Home({ workspace, token, userId, theme, onToggleTheme }: { workspace: W
       </View>
       <ScrollView contentContainerStyle={s.content}>
         {!guideReady ? <Text style={s.small}>Preparando seu espaço…</Text> : <>
-        {!guideActive && tab === 'Resumo' && <Pressable accessibilityRole="button" accessibilityLabel="Abrir guia de primeiros passos" onPress={reopenGuide}>
-          <Text style={{ color: palette.green, fontWeight: '600' }}>Como começar? Ver guia de primeiros passos ›</Text>
-        </Pressable>}
         {guideActive && guideStep !== null && (tab === 'Resumo' ?
           <FirstRunGuide step={guideStep} exists={guideExists} hasCard={cards.length > 0}
             onOpen={openGuideForm} onNext={advanceGuide} onFinish={finishGuide} /> :
@@ -240,26 +253,25 @@ function Home({ workspace, token, userId, theme, onToggleTheme }: { workspace: W
         {tab === 'Resumo' ? guideActive ? null : <>
           <View style={s.month}><Pressable accessibilityRole="button" accessibilityLabel="Mês anterior" onPress={() => { setMonth(value => new Date(value.getFullYear(), value.getMonth() - 1, 1)); setNotice(''); }} style={s.arrow}><Text style={s.arrowText}>‹</Text></Pressable><Text style={s.monthText}>{monthTitle}</Text><Pressable accessibilityRole="button" accessibilityLabel="Próximo mês" onPress={() => { setMonth(value => new Date(value.getFullYear(), value.getMonth() + 1, 1)); setNotice(''); }} style={s.arrow}><Text style={s.arrowText}>›</Text></Pressable></View>
           <ProjectionPanel workspace={workspace} token={token} period={period} refresh={refresh} />
-          <MonthlyReport workspace={workspace} token={token} period={period} />
           {loading && <Text style={s.small}>Carregando gastos…</Text>}
           <View style={s.hero}><Text style={s.heroLabel}>GASTOS E COMPROMISSOS DO MÊS</Text><Text style={s.heroValue}>{money(total)}</Text><View style={s.heroDivider} /><Text style={s.heroCaption}>Compras e despesas, incluindo fixas pendentes: {money(consumptionTotal)} · Faturas parceladas: {money(financedTotal)}</Text><Text style={s.heroFoot}>Despesa fixa paga substitui a previsão pelo valor real. Compras no cartão ficam no mês da fatura; financiamento futuro não é nova compra.</Text></View>
           <View style={s.section}><Text style={s.sectionTitle}>{category ? category.name : 'Por categoria'}</Text><Text style={s.small}>{category ? 'Subcategorias' : 'Toque para explorar'}</Text></View>
-          <Button label="Gerenciar categorias e subcategorias" secondary onPress={() => setManageCategories(true)} />
           <Card>
             {category && <Button label="← Todas as categorias" secondary onPress={() => setDetail(null)} />}
             {!total ? <View style={s.empty}><Text style={s.sectionTitle}>Um mês em branco</Text><Text style={s.small}>Use o + para lançar uma despesa ou compra no crédito.</Text></View> :
-              category ? category.subcategories.map(sub => {
+              category ? category.subcategories.map((sub, index) => {
                 const value = visible.filter(item => item.subcategory_id === sub.id).reduce((sum, item) => sum + item.amount_cents, 0);
                 const categoryTotal = visible.reduce((sum, item) => sum + item.amount_cents, 0);
-                return <Bar key={sub.id} label={sub.name} value={value} total={categoryTotal} color={category.color} />;
+                return <Bar key={sub.id} label={sub.name} value={value} total={categoryTotal} color={chartColor(index, theme)} />;
               }) : <>
-                {categories.map(item => {
+                {categories.map((item, index) => {
                   const value = expenses.filter(row => row.category_id === item.id).reduce((sum, row) => sum + row.amount_cents, 0);
-                  return <Bar key={item.id} label={item.name} value={value} total={total} color={item.color} onPress={() => setDetail(item.id)} />;
+                  return <Bar key={item.id} label={item.name} value={value} total={total} color={chartColor(index, theme)} onPress={() => setDetail(item.id)} />;
                 })}
-                {financedTotal > 0 && <Bar label="Faturas parceladas" value={financedTotal} total={total} color="#6C7296" />}
+                {financedTotal > 0 && <Bar label="Faturas parceladas" value={financedTotal} total={total} color={chartColor(categories.length, theme)} />}
               </>}
           </Card>
+          <PieChart title={category ? `Subcategorias de ${category.name}` : 'Categorias em gráfico de pizza'} segments={chartSegments} />
           <View style={s.section}><Text style={s.sectionTitle}>Despesas do mês</Text><Text style={s.small}>{visible.length} {visible.length === 1 ? 'item' : 'itens'}</Text></View>
           <Card>{visible.length ? visible.map(item => {
             const cat = categories.find(x => x.id === item.category_id);
@@ -306,6 +318,28 @@ function Home({ workspace, token, userId, theme, onToggleTheme }: { workspace: W
       {!guideActive && <Pressable accessibilityRole="button" accessibilityLabel="Adicionar despesa" onPress={() => { void openNewExpense(); }} style={({ pressed }) => [s.fab, pressed && { opacity: 0.8 }]}><Text style={s.fabText}>+</Text></Pressable>}
       <View style={s.nav}>{(['Resumo', 'Contas', 'Cartões', 'Planejamento'] as Tab[]).map((item, index) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => { setTab(item); setDetail(null); if (item === 'Resumo') setRefresh(value => value + 1); }} style={s.navItem}><View style={[s.navIcon, tab === item && s.navActive]}><Text style={[s.navSymbol, tab === item && { color: palette.green }]}>{['▥', '▤', '▱', '◷'][index]}</Text></View><Text style={[s.navLabel, tab === item && { color: palette.green, fontWeight: '700' }]}>{item}</Text></Pressable>)}</View>
     </View>
+    <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+      <View style={s.menuOverlay}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Fechar menu" style={StyleSheet.absoluteFill} onPress={() => setMenuOpen(false)} />
+        <SafeAreaView style={s.menuPanel}>
+          <Text style={s.menuTitle}>Meu Controle</Text>
+          <Text style={s.small}>{workspace.name}</Text>
+          <Button label="Participantes" secondary onPress={() => { setMenuOpen(false); onOpenMembers(); }} />
+          <Button label="Relatório do mês" secondary onPress={() => { setMenuOpen(false); setReportOpen(true); }} />
+          <Button label="Gerenciar categorias" secondary onPress={() => { setMenuOpen(false); setManageCategories(true); }} />
+          <View style={{ flex: 1 }} />
+          <Button label="Sair da conta" secondary onPress={() => { setMenuOpen(false); onLogout(); }} />
+        </SafeAreaView>
+      </View>
+    </Modal>
+    <Modal visible={reportOpen} animationType="slide" onRequestClose={() => setReportOpen(false)}>
+      <SafeAreaView style={s.safe}><View style={s.formShell}><ScrollView contentContainerStyle={s.content}>
+        <Text style={s.pageTitle}>Relatório do mês</Text>
+        <Text style={s.description}>{monthTitle}</Text>
+        <MonthlyReport workspace={workspace} token={token} period={period} />
+        <Button label="Fechar" secondary onPress={() => setReportOpen(false)} />
+      </ScrollView></View><ToastViewport bottom={24} /></SafeAreaView>
+    </Modal>
     {form && <Modal visible animationType="slide" onRequestClose={() => setForm(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ExpenseForm key={editing?.id || 'new'} initial={editing} categories={categories} accounts={accounts} cards={cards} onCreditSave={saveCredit} onCategory={addCategory} onSubcategory={addSubcategory} onSave={saveExpense} onCancel={() => { setForm(false); setEditing(undefined); }} /></View><ToastViewport bottom={24} /></SafeAreaView></Modal>}
     {manageCategories && <Modal visible animationType="slide" onRequestClose={() => setManageCategories(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <Text style={s.pageTitle}>Categorias e subcategorias</Text>
@@ -354,13 +388,16 @@ function CategoryActionRow({ label, action, onAction, nested = false, inactive =
 
 function Bar({ label, value, total, color, onPress }: { label: string; value: number; total: number; color: string; onPress?: () => void }) {
   const s = makeStyles();
-  const content = <><View style={s.barHeading}><Text style={s.itemTitle}>{label}</Text><Text style={s.itemValue}>{money(value)}{onPress ? '  ›' : ''}</Text></View><View style={s.track}><View style={{ width: `${total ? value / total * 100 : 0}%`, backgroundColor: color, height: 9, borderRadius: 5 }} /></View></>;
-  return onPress ? <Pressable accessibilityRole="button" accessibilityLabel={`${label}, ${money(value)}, ver subcategorias`} onPress={onPress} style={s.bar}>{content}</Pressable> : <View style={s.bar}>{content}</View>;
+  const percentage = `${(total ? value / total * 100 : 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+  const content = <><View style={s.barHeading}><View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}><Text style={s.itemTitle}>{label}</Text><Text style={s.barPercent}>{percentage}</Text></View><Text style={s.itemValue}>{money(value)}{onPress ? '  ›' : ''}</Text></View><View style={s.track}><View style={{ width: `${total ? value / total * 100 : 0}%`, backgroundColor: color, height: 9, borderRadius: 5 }} /></View></>;
+  return onPress ? <Pressable accessibilityRole="button" accessibilityLabel={`${label}, ${percentage}, ${money(value)}, ver subcategorias`} onPress={onPress} style={s.bar}>{content}</Pressable> : <View style={s.bar}>{content}</View>;
 }
 
 const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: palette.bg }, shell: { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' }, formShell: { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' },
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  menuButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: palette.soft }, menuIcon: { fontSize: 25, color: palette.ink, lineHeight: 29 },
+  menuOverlay: { flex: 1, backgroundColor: '#0008', flexDirection: 'row' }, menuPanel: { width: '82%', maxWidth: 360, height: '100%', backgroundColor: palette.bg, padding: 20, gap: 14 }, menuTitle: { fontSize: 24, fontWeight: '700', color: palette.ink },
   logo: { width: 48, height: 48, borderRadius: 13 }, themeToggle: { minHeight: 44, paddingHorizontal: 10, borderRadius: 12, backgroundColor: palette.soft, justifyContent: 'center' }, themeToggleText: { color: palette.ink, fontSize: 12, fontWeight: '700' },
   brand: { fontSize: 23, fontWeight: '800', letterSpacing: -1, color: palette.ink }, small: { fontSize: 12, color: palette.muted, lineHeight: 18 },
   content: { padding: 24, gap: 18, paddingBottom: 105 }, month: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, monthText: { fontWeight: '600', fontSize: 16, color: palette.ink },
@@ -368,6 +405,7 @@ const makeStyles = () => StyleSheet.create({
   hero: { borderRadius: 24, backgroundColor: '#285B49', padding: 24, gap: 10 }, heroLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.8, color: '#D5E2C4' }, heroValue: { fontSize: 38, fontWeight: '700', color: 'white', letterSpacing: -1 }, heroDivider: { height: 1, backgroundColor: '#4C7766', marginVertical: 4 }, heroCaption: { fontSize: 13, lineHeight: 20, color: '#E6EEE1' }, heroFoot: { color: '#DAE6D0', fontSize: 10, lineHeight: 16 },
   section: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }, sectionTitle: { color: palette.ink, fontSize: 17, fontWeight: '700' },
   bar: { paddingVertical: 10, gap: 10, minHeight: 58 }, barHeading: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 }, track: { height: 9, borderRadius: 5, backgroundColor: palette.track, overflow: 'hidden' }, itemTitle: { color: palette.ink, fontWeight: '600', fontSize: 14 }, itemValue: { color: palette.ink, fontWeight: '600', fontSize: 13 },
+  barPercent: { color: palette.muted, fontWeight: '700', fontSize: 13 },
   transaction: { flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: palette.line, paddingVertical: 10 }, transactionDot: { width: 8, height: 8, borderRadius: 4 },
   footerNote: { fontSize: 12, color: palette.muted, textAlign: 'center', lineHeight: 19 }, fab: { position: 'absolute', right: 24, bottom: 100, width: 58, height: 58, borderRadius: 19, backgroundColor: palette.green, alignItems: 'center', justifyContent: 'center', elevation: 5, boxShadow: '0 4px 12px #20362f25' }, fabText: { fontSize: 34, lineHeight: 40, color: palette.bg },
   nav: { flexDirection: 'row', borderTopWidth: 1, borderColor: palette.line, backgroundColor: palette.bg, paddingVertical: 8 }, navItem: { flex: 1, alignItems: 'center', gap: 4, minHeight: 62 }, navIcon: { width: 58, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 14 }, navActive: { backgroundColor: palette.soft }, navSymbol: { fontSize: 23, color: palette.muted }, navLabel: { fontSize: 12, color: palette.muted },

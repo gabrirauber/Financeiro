@@ -111,6 +111,33 @@ def today():
     return datetime.now(ZoneInfo("America/Sao_Paulo")).date().isoformat()
 
 
+def test_correct_opening_balance_updates_cash_without_creating_income(client):
+    headers, space = setup(client)
+    account_id = account(client, headers, space, "Banco", 10_000)
+    root = f"/workspaces/{space}"
+    income = client.post(
+        f"{root}/incomes", headers=headers,
+        json={"account_id": account_id, "amount_cents": 2_000, "occurred_on": today()},
+    )
+    assert income.status_code == 201, income.text
+
+    changed = client.patch(
+        f"{root}/accounts/{account_id}/opening-balance", headers=headers,
+        json={"opening_balance_cents": 15_000},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["opening_balance_cents"] == 15_000
+    assert changed.json()["balance_cents"] == 17_000
+    assert len(client.get(f"{root}/accounts/{account_id}/statement", headers=headers).json()) == 1
+
+    invalid = client.patch(
+        f"{root}/accounts/{account_id}/opening-balance", headers=headers,
+        json={"opening_balance_cents": -1},
+    )
+    assert invalid.status_code == 422
+    assert client.get(f"{root}/accounts", headers=headers).json()[0]["balance_cents"] == 17_000
+
+
 def test_balances_statement_and_atomic_transfer(client):
     headers, space = setup(client)
     a = account(client, headers, space, "A", 100_000)

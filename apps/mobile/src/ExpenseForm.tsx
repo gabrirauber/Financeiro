@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Account, Category, Expense, ExpenseInput, Subcategory, CreditCard, CardPurchaseInput, dateToDisplay, dateToIso, paymentLabel } from './finance';
 import { localDate, parseCents, validDate } from './prototype';
+import { MoneyInput } from './MoneyInput';
 import { CategoryCreator } from './CategoryCreator';
 import { Button, Chip, palette } from './ui';
 import { useToastSetter } from './Toast';
@@ -69,7 +70,7 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <View><Text style={s.eyebrow}>LANÇAMENTO RÁPIDO</Text><Text style={s.title}>{initial ? 'Editar despesa' : 'Nova despesa'}</Text><Text style={s.hint}>{payment === 'credit' ? 'Compra no crédito: entra na fatura. O saldo muda ao pagar a fatura.' : 'Despesa já paga: o saldo da conta muda ao salvar.'}</Text></View>
       <Text style={s.label}>Valor *</Text>
-      <View style={s.amountRow}><Text style={s.currency}>R$</Text><TextInput accessibilityLabel="Valor da despesa" placeholder="Informe o valor" placeholderTextColor="#829187" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} style={s.amount} maxLength={14} /></View>
+      <View style={s.amountRow}><Text style={s.currency}>R$</Text><MoneyInput accessibilityLabel="Valor da despesa" placeholder="Informe o valor" placeholderTextColor="#829187" value={amount} onChangeText={setAmount} style={s.amount} maxLength={14} /></View>
       <Text style={s.label}>Categoria *</Text>
       <View style={s.wrap}>{visibleCategories.map(item => <Chip key={item.id} label={item.name} selected={category === item.id} onPress={() => { setCategory(item.id); setSubcategory(''); }} />)}</View>
       <CategoryCreator kind="categoria" existing={categories.map(item => item.name)} onCreate={async name => {

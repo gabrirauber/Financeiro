@@ -29,6 +29,10 @@ class AccountInput(BaseModel):
         return value
 
 
+class OpeningBalanceInput(BaseModel):
+    opening_balance_cents: int = Field(ge=0, le=MAX_CENTS)
+
+
 class IncomeInput(BaseModel):
     account_id: UUID
     amount_cents: int = Field(gt=0, le=MAX_CENTS)
@@ -123,6 +127,17 @@ def create_account(workspace_id: UUID, data: AccountInput, db: Db, user: Current
         "opened_on": account.opened_on,
         "balance_cents": account.opening_balance_cents,
     }
+
+
+@router.patch("/accounts/{account_id}/opening-balance")
+def update_opening_balance(
+    workspace_id: UUID, account_id: UUID, data: OpeningBalanceInput, db: Db, user: CurrentUser
+):
+    require_member(db, workspace_id, user.id, lock=True)
+    account = account_or_404(db, workspace_id, account_id)
+    account.opening_balance_cents = data.opening_balance_cents
+    db.commit()
+    return next(item for item in account_balances(db, workspace_id) if item["id"] == account_id)
 
 
 @router.get("/accounts/{account_id}/statement")

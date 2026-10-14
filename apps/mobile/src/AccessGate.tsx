@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AppState, Image, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { AppState, Image, Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ApiError, request, User, Workspace } from './api';
 import { clearSession, readSession, saveSession } from './session';
@@ -10,7 +10,7 @@ import { useToastSetter } from './Toast';
 import { saveOnboardingStep } from './onboardingProgress';
 
 const input = () => ({ backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink });
-export function AccessGate({ children, theme, onToggleTheme }: { children: (workspace: Workspace, token: string, userId: string) => React.ReactNode; theme: ThemeMode; onToggleTheme: () => void }) {
+export function AccessGate({ children, theme, onToggleTheme }: { children: (workspace: Workspace, token: string, userId: string, openMembers: () => void, logout: () => void) => React.ReactNode; theme: ThemeMode; onToggleTheme: () => void }) {
   const [token, setToken] = useState<string>();
   const tokenRef = useRef<string | undefined>(undefined);
   function activate(value: string) { tokenRef.current = value; setToken(value); }
@@ -108,14 +108,14 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
   }
 
   if (selected && user && token) return <View style={{ flex: 1, backgroundColor: palette.bg }}>
-    <SafeAreaView edges={['top']} style={{ paddingHorizontal: 20, paddingTop: 8, gap: 8 }}>
-      <Text style={{ color: palette.ink, fontWeight: '700' }}>{selected.name}</Text>
-      <Button label={managing ? 'Fechar participantes' : 'Participantes'} secondary onPress={() => setManaging(!managing)} />
-    </SafeAreaView>
-    {managing ? <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:20, maxWidth:560, width:'100%', alignSelf:'center', gap:16}}>
-      <MembersPanel workspace={selected} token={token} onClose={() => setManaging(false)} onChanged={() => load(token)} />
-      <Button label="Sair da conta" secondary onPress={() => void logout()} />
-    </ScrollView> : children(selected, token, user.id)}
+    {children(selected, token, user.id, () => setManaging(true), () => { void logout(); })}
+    <Modal visible={managing} animationType="slide" onRequestClose={() => setManaging(false)}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:20, maxWidth:560, width:'100%', alignSelf:'center', gap:16}}>
+          <MembersPanel workspace={selected} token={token} onClose={() => setManaging(false)} onChanged={() => load(token)} />
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
   </View>;
 
   return <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>

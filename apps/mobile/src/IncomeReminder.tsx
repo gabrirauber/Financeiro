@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, ScrollView, Text, TextInput, View } from 'react-native';
+import { Modal, ScrollView, Text, View } from 'react-native';
 import { request, Workspace } from './api';
 import { Account } from './finance';
 import { localDate, money, parseCents } from './prototype';
+import { MoneyInput } from './MoneyInput';
 import { Button, Card, Chip, palette } from './ui';
 import { ToastViewport, useToastSetter } from './Toast';
 
@@ -50,7 +51,7 @@ export function IncomeReminder({workspace, token, refresh, onChanged}: {workspac
             <ScrollView horizontal contentContainerStyle={{gap:8}}>{accounts.map(a => <Chip key={a.id} label={a.name} selected={accountId === a.id} onPress={() => setAccountId(a.id)} />)}</ScrollView>
             {!accounts.length && <Text style={{ color: palette.ink }}>Cadastre uma conta antes de registrar o recebimento. Você pode escolher “Ainda não recebi” e voltar depois.</Text>}
             <Text style={{ color: palette.ink }}>Valor recebido (R$)</Text>
-            <TextInput accessibilityLabel="Valor recebido" style={input()} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+            <MoneyInput accessibilityLabel="Valor recebido" style={input()} value={amount} onChangeText={setAmount} />
             <Text style={{ color: palette.ink }}>Depois deste recebimento</Text>
             <View style={{flexDirection:'row',gap:8}}><Chip label="Concluir previsão" selected={complete} onPress={() => setComplete(true)} /><Chip label="Manter diferença" selected={!complete} onPress={() => setComplete(false)} /></View>
             <Button label={busy ? 'Salvando…' : 'Confirmar recebimento'} onPress={() => { const cents = parseCents(amount); if (!accountId || cents === null) { setError('Informe uma conta e um valor válido.'); return; } void act(async () => { await request(`${root}/income-occurrences/${current.id}/receive`, token, 'POST', {account_id:accountId,amount_cents:cents,occurred_on:localDate().split('/').reverse().join('-'),complete,request_id:`${Date.now()}-${Math.random().toString(36).slice(2)}`}); }); }} />

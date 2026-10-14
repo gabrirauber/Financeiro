@@ -35,7 +35,7 @@ if (-not $env:ANDROID_HOME) {
     $env:ANDROID_HOME = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
 }
 $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
-$env:GRADLE_USER_HOME = Join-Path $repoRoot '.cache\gradle'
+$env:GRADLE_USER_HOME = Join-Path $buildRoot '.gradle'
 $env:EXPO_PUBLIC_API_URL = $apiUri.GetLeftPart([UriPartial]::Path).TrimEnd('/')
 $env:NODE_ENV = 'production'
 

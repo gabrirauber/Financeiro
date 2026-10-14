@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { request, Workspace } from './api';
 import { localDate, money, parseCents, validDate } from './prototype';
+import { MoneyInput } from './MoneyInput';
 import { Button, Card, Chip, palette } from './ui';
 import { useToastSetter } from './Toast';
 
@@ -26,6 +27,8 @@ export function AccountsPanel({ workspace, token, startCreateRequest, onCreated 
   const [source, setSource] = useState('');
   const [destination, setDestination] = useState('');
   const [editing, setEditing] = useState<string>();
+  const [editingOpening, setEditingOpening] = useState(false);
+  const [openingAmount, setOpeningAmount] = useState('');
   const setError = useToastSetter('error');
   const setNotice = useToastSetter('success');
   const [busy, setBusy] = useState(false);
@@ -47,13 +50,28 @@ export function AccountsPanel({ workspace, token, startCreateRequest, onCreated 
     return () => { active = false; };
   }, [workspace.id, token]);
   async function choose(id: string) {
-    setSelected(id); setError('');
+    setSelected(id); setEditingOpening(false); setError('');
     try { setStatement(await request<Movement[]>(`${root}/accounts/${id}/statement`, token)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Erro ao carregar extrato.'); }
   }
   function reset() {
     setMode(null); setEditing(undefined); setName(''); setAmount(''); setNote('');
     setDate(localDate()); setError('');
+  }
+  async function saveOpening() {
+    if (!selected) return;
+    const cents = parseCents(openingAmount);
+    if (cents === null && !/^0(?:,0{1,2})?$/.test(openingAmount.trim())) {
+      setError('Informe um saldo inicial válido.'); return;
+    }
+    setBusy(true); setError('');
+    try {
+      await request(`${root}/accounts/${selected}/opening-balance`, token, 'PATCH',
+        { opening_balance_cents: cents || 0 });
+      setEditingOpening(false); await load(selected);
+      setNotice('Saldo inicial corrigido. O saldo atual foi atualizado.');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível corrigir o saldo inicial.'); }
+    finally { setBusy(false); }
   }
   function start(next: Mode) { reset(); setMode(next); setAmount(next === 'account' ? '0,00' : ''); setSource(selected || accounts[0]?.id || ''); setDestination(accounts.find(a => a.id !== (selected || accounts[0]?.id))?.id || ''); }
   useEffect(() => { if (startCreateRequest) start('account'); }, [startCreateRequest]);
@@ -125,7 +143,8 @@ export function AccountsPanel({ workspace, token, startCreateRequest, onCreated 
       {mode === 'account' && <>{field('Descrição', name, setName, { placeholder: 'Ex.: Conta principal' })}<View style={{ flexDirection: 'row', gap: 8 }}><Chip label="Banco" selected={kind === 'bank'} onPress={() => setKind('bank')} /><Chip label="Dinheiro" selected={kind === 'cash'} onPress={() => setKind('cash')} /></View></>}
       {mode !== 'account' && <><Text style={{ color: palette.ink }}>Conta {mode === 'transfer' ? 'de origem' : 'de recebimento'}</Text><ScrollView horizontal contentContainerStyle={{ gap: 8 }}>{accounts.map(item => <Chip key={item.id} label={item.name} selected={source === item.id} onPress={() => setSource(item.id)} />)}</ScrollView></>}
       {mode === 'transfer' && <><Text style={{ color: palette.ink }}>Conta de destino</Text><ScrollView horizontal contentContainerStyle={{ gap: 8 }}>{accounts.map(item => <Chip key={item.id} label={item.name} selected={destination === item.id} onPress={() => setDestination(item.id)} />)}</ScrollView></>}
-      {field(mode === 'account' ? 'Saldo inicial (R$)' : 'Valor (R$)', amount, setAmount, { keyboardType: 'decimal-pad', placeholder: mode === 'account' ? undefined : 'Informe o valor' })}
+      <View style={{ gap: 5 }}><Text style={{ color: palette.ink, fontWeight: '600' }}>{mode === 'account' ? 'Saldo inicial (R$)' : 'Valor (R$)'}</Text>
+        <MoneyInput accessibilityLabel={mode === 'account' ? 'Saldo inicial (R$)' : 'Valor (R$)'} style={input()} value={amount} onChangeText={setAmount} placeholder={mode === 'account' ? undefined : 'Informe o valor'} /></View>
       {mode !== 'account' && <>{field('Data (DD/MM/AAAA)', date, setDate, { keyboardType: 'numbers-and-punctuation' })}{field('Observação (opcional)', note, setNote, { placeholder: 'Ex.: Salário' })}</>}
       <Button label={busy ? 'Salvando…' : 'Salvar'} onPress={() => { if (!busy) void save(); }} />
       <Button label="Cancelar" secondary onPress={reset} />
@@ -133,6 +152,16 @@ export function AccountsPanel({ workspace, token, startCreateRequest, onCreated 
     {current && <><Text style={{ color: palette.ink, fontSize: 18, fontWeight: '700' }}>Extrato · {current.name}</Text>
       <Card>
         <Text style={{ color: palette.muted }}>Saldo inicial: {money(current.opening_balance_cents)}</Text>
+        {!editingOpening ? <Button label="Corrigir saldo inicial" secondary onPress={() => {
+          setOpeningAmount((current.opening_balance_cents / 100).toFixed(2).replace('.', ','));
+          setEditingOpening(true); setError('');
+        }} /> : <View style={{ gap: 8 }}>
+          <Text style={{ color: palette.muted }}>A correção altera o saldo da conta sem criar uma receita.</Text>
+          <MoneyInput accessibilityLabel="Novo saldo inicial" style={input()} value={openingAmount}
+            onChangeText={setOpeningAmount} />
+          <Button label={busy ? 'Salvando…' : 'Salvar saldo inicial'} onPress={() => { if (!busy) void saveOpening(); }} />
+          <Button label="Cancelar" secondary onPress={() => setEditingOpening(false)} />
+        </View>}
         {!statement.length && <Text style={{ color: palette.muted }}>Nenhuma movimentação nesta conta.</Text>}
         {statement.map(row => <View key={row.id} style={{ paddingVertical: 8, borderTopWidth: 1, borderColor: palette.line, gap: 4 }}>
           <Text style={{ color: palette.ink, fontWeight: '600' }}>{row.kind === 'income' ? 'Receita' : row.kind === 'expense' ? 'Despesa paga' : row.kind === 'bill_payment' ? 'Fatura paga' : row.kind === 'transfer_in' ? 'Transferência recebida' : 'Transferência enviada'} · {dateToDisplay(row.occurred_on)}</Text>

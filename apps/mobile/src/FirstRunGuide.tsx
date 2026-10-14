@@ -24,8 +24,8 @@ export function FirstRunGuide({ step, exists, hasCard, onOpen, onNext, onFinish 
     <Text style={{ color: palette.muted, lineHeight: 22 }}>{current.detail}</Text>
     {exists && <Text style={{ color: palette.green }}>Esta etapa já tem um cadastro no espaço.</Text>}
     {needsCard && <Text style={{ color: palette.muted }}>Para criar uma assinatura no cartão, cadastre um cartão primeiro.</Text>}
-    <Button label={exists ? 'Continuar' : needsCard ? 'Cadastrar cartão primeiro' : current.action} onPress={exists ? onNext : onOpen} />
-    <Button label="Pular esta etapa" secondary onPress={onNext} />
+    <Button label={needsCard ? 'Cadastrar cartão primeiro' : current.action} onPress={onOpen} />
+    <Button label="Próximo" secondary onPress={onNext} />
     <Button label="Pular todo o guia" secondary onPress={onFinish} />
   </Card>;
 }
