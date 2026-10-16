@@ -344,7 +344,7 @@ function Home({ workspace, token, userId, theme, onToggleTheme, onOpenMembers, o
         <Button label="Fechar" secondary onPress={() => setReportOpen(false)} />
       </ScrollView></View><ToastViewport bottom={24} /></SafeAreaView>
     </Modal>
-    {form && <Modal visible animationType="slide" onRequestClose={() => setForm(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ExpenseForm key={editing?.id || 'new'} initial={editing} categories={categories} accounts={accounts} cards={cards} onCreditSave={saveCredit} onCategory={addCategory} onSubcategory={addSubcategory} onSave={saveExpense} onCancel={() => { setForm(false); setEditing(undefined); }} /></View><ToastViewport bottom={24} /></SafeAreaView></Modal>}
+    {form && <Modal visible animationType="slide" onRequestClose={() => setForm(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ExpenseForm key={editing?.id || 'new'} workspaceId={workspace.id} initial={editing} categories={categories} accounts={accounts} cards={cards} onCreditSave={saveCredit} onCategory={addCategory} onSubcategory={addSubcategory} onSave={saveExpense} onCancel={() => { setForm(false); setEditing(undefined); }} /></View><ToastViewport bottom={24} /></SafeAreaView></Modal>}
     {manageCategories && <Modal visible animationType="slide" onRequestClose={() => setManageCategories(false)}><SafeAreaView style={s.safe}><View style={s.formShell}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <Text style={s.pageTitle}>Categorias e subcategorias</Text>
       <Text style={s.description}>As opções pertencem a este espaço e ficam disponíveis para todos os participantes. Desativar preserva os lançamentos antigos.</Text>

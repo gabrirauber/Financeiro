@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Account, Category, Expense, ExpenseInput, Subcategory, CreditCard, CardPurchaseInput, dateToDisplay, dateToIso, paymentLabel } from './finance';
 import { localDate, parseCents, validDate } from './prototype';
 import { MoneyInput } from './MoneyInput';
 import { CategoryCreator } from './CategoryCreator';
 import { Button, Chip, palette } from './ui';
 import { useToastSetter } from './Toast';
+import { readPaymentPreference, savePaymentPreference } from './paymentPreference';
 
-export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory, onSubcategory, onCreditSave, cards, initial }: {
+export function ExpenseForm({ workspaceId, onCancel, onSave, categories, accounts, onCategory, onSubcategory, onCreditSave, cards, initial }: {
+  workspaceId: string;
   onCancel: () => void;
   onSave: (expense: ExpenseInput) => Promise<void>;
   onCreditSave: (purchase: CardPurchaseInput) => Promise<void>;
@@ -27,6 +29,7 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
   const [source, setSource] = useState(initial?.account_id || accounts.find(a => a.kind === 'bank')?.id || '');
   const [note, setNote] = useState(initial?.note || '');
   const [cardId, setCardId] = useState(cards[0]?.id || '');
+  const choiceTouched = useRef(false);
   const [count, setCount] = useState('1');
   const [firstBill, setFirstBill] = useState('');
   const setError = useToastSetter('error');
@@ -35,6 +38,18 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
   const visibleCategories = categories.filter(item => item.active || item.id === category);
   const visibleSubcategories = selected?.subcategories.filter(item => item.active || item.id === subcategory) || [];
   const options = accounts.filter(item => payment === 'cash' ? item.kind === 'cash' : item.kind === 'bank');
+  useEffect(() => {
+    if (initial) return;
+    let active = true;
+    void readPaymentPreference(workspaceId).then(preference => {
+      if (!active || choiceTouched.current || !preference) return;
+      setPayment(preference.method);
+      if (preference.cardId && cards.some(item => item.id === preference.cardId))
+        setCardId(preference.cardId);
+      setSource(accounts.find(a => preference.method === 'cash' ? a.kind === 'cash' : a.kind === 'bank')?.id || '');
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [workspaceId]);
   async function save() {
     const cents = parseCents(amount);
     if (!cents) return setError('Informe um valor maior que zero. Exemplo: 45,90.');
@@ -58,11 +73,14 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
             first_bill_month: `${billYear}-${billMonth}-01`,
           } : {}),
         });
+        if (!initial) await savePaymentPreference(workspaceId, { method: 'credit', cardId }).catch(() => {});
       } else await onSave({
         account_id: source, category_id: category, subcategory_id: subcategory,
         amount_cents: cents, occurred_on: dateToIso(date), payment_method: payment,
         note: note.trim(),
       });
+      if (!initial && payment !== 'credit')
+        await savePaymentPreference(workspaceId, { method: payment, cardId }).catch(() => {});
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível salvar a despesa.'); }
     finally { setBusy(false); }
   }
@@ -72,12 +90,12 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
       <Text style={s.label}>Valor *</Text>
       <View style={s.amountRow}><Text style={s.currency}>R$</Text><MoneyInput accessibilityLabel="Valor da despesa" placeholder="Informe o valor" placeholderTextColor="#829187" value={amount} onChangeText={setAmount} style={s.amount} maxLength={14} /></View>
       <Text style={s.label}>Categoria *</Text>
-      <View style={s.wrap}>{visibleCategories.map(item => <Chip key={item.id} label={item.name} selected={category === item.id} onPress={() => { setCategory(item.id); setSubcategory(''); }} />)}</View>
+      <View style={s.wrap}>{visibleCategories.map(item => <Chip key={item.id} label={item.name} selected={category === item.id} onPress={() => { Keyboard.dismiss(); setCategory(item.id); setSubcategory(''); }} />)}</View>
       <CategoryCreator kind="categoria" existing={categories.map(item => item.name)} onCreate={async name => {
         const created = await onCategory(name); setCategory(created.id); setSubcategory('');
       }} />
       <Text style={s.label}>Subcategoria *</Text>
-      <View style={s.wrap}>{selected ? visibleSubcategories.length ? visibleSubcategories.map(item => <Chip key={item.id} label={item.name} selected={subcategory === item.id} onPress={() => setSubcategory(item.id)} />) : <Text style={s.hint}>Cadastre uma subcategoria abaixo.</Text> : <Text style={s.hint}>Selecione uma categoria acima.</Text>}</View>
+      <View style={s.wrap}>{selected ? visibleSubcategories.length ? visibleSubcategories.map(item => <Chip key={item.id} label={item.name} selected={subcategory === item.id} onPress={() => { Keyboard.dismiss(); setSubcategory(item.id); }} />) : <Text style={s.hint}>Cadastre uma subcategoria abaixo.</Text> : <Text style={s.hint}>Selecione uma categoria acima.</Text>}</View>
       {selected?.active && <CategoryCreator key={selected.id} kind="subcategoria" existing={selected.subcategories.map(item => item.name)} onCreate={async name => {
         const created = await onSubcategory(selected.id, name); setSubcategory(created.id);
       }} />}
@@ -85,13 +103,14 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
       <TextInput accessibilityLabel="Data da compra" style={s.input} value={date} onChangeText={setDate} placeholder="DD/MM/AAAA" keyboardType="numbers-and-punctuation" maxLength={10} />
       <Text style={s.label}>Forma de pagamento *</Text>
       <View style={s.wrap}>{(['pix', 'debit', 'cash', ...(!initial ? ['credit'] as const : [])] as const).map(item => <Chip key={item} label={paymentLabel[item]} selected={payment === item} onPress={() => {
+        Keyboard.dismiss(); choiceTouched.current = true;
         setPayment(item);
         setSource(accounts.find(a => item === 'cash' ? a.kind === 'cash' : a.kind === 'bank')?.id || '');
       }} />)}</View>
       {payment === 'credit' ? <>
         <Text style={s.label}>Cartão *</Text>
         <View style={s.wrap}>{cards.length ? cards.map(item =>
-          <Chip key={item.id} label={item.name} selected={cardId === item.id} onPress={() => setCardId(item.id)} />) :
+          <Chip key={item.id} label={item.name} selected={cardId === item.id} onPress={() => { Keyboard.dismiss(); choiceTouched.current = true; setCardId(item.id); }} />) :
           <Text style={s.hint}>Cadastre um cartão na aba Cartões.</Text>}</View>
         <Text style={s.label}>Parcelas *</Text>
         <TextInput accessibilityLabel="Número de parcelas" style={s.input} value={count} onChangeText={setCount} keyboardType="number-pad" maxLength={3} />
@@ -101,7 +120,7 @@ export function ExpenseForm({ onCancel, onSave, categories, accounts, onCategory
           keyboardType="numbers-and-punctuation" maxLength={7} />
       </> : <>
         <Text style={s.label}>Conta de saída *</Text>
-        <View style={s.wrap}>{options.length ? options.map(item => <Chip key={item.id} label={item.name} selected={source === item.id} onPress={() => setSource(item.id)} />) : <Text style={s.hint}>Cadastre uma conta {payment === 'cash' ? 'dinheiro' : 'bancária'} na aba Contas.</Text>}</View>
+        <View style={s.wrap}>{options.length ? options.map(item => <Chip key={item.id} label={item.name} selected={source === item.id} onPress={() => { Keyboard.dismiss(); setSource(item.id); }} />) : <Text style={s.hint}>Cadastre uma conta {payment === 'cash' ? 'dinheiro' : 'bancária'} na aba Contas.</Text>}</View>
       </>}
       <Text style={s.label}>Observação <Text style={s.hint}>(opcional)</Text></Text>
       <TextInput accessibilityLabel="Observação" placeholder="Algo para lembrar?" style={[s.input, { minHeight: 80 }]} value={note} onChangeText={setNote} multiline maxLength={200} />

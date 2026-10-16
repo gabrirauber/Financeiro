@@ -27,6 +27,7 @@ export type CardInstallment = {
   id: string; purchase_id: string; card_id: string; card_name: string;
   invoice_id: string; invoice_month: string; invoice_paid: boolean;
   purchased_on: string; legacy: boolean; sequence: number; total_count: number;
+  created_at: string;
   amount_cents: number; category_id: string; subcategory_id: string; note: string;
 };
 export type Invoice = {

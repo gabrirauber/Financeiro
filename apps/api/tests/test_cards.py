@@ -92,6 +92,41 @@ def test_card_installments_and_invoice_payment(client):
     )
     assert revised.status_code == 200, revised.text
     assert [item["amount_cents"] for item in revised.json()["installments"]] == [3333, 4500, 4500]
+    resized = client.patch(
+        f"{root}/card-purchases/{purchase.json()['id']}/remaining",
+        headers=headers,
+        json={
+            "installment_amount_cents": 5000,
+            "remaining_installment_count": 3,
+            "category_id": category["id"],
+            "subcategory_id": sub["id"],
+            "note": "Nova quantidade",
+        },
+    )
+    assert resized.status_code == 200, resized.text
+    assert [item["amount_cents"] for item in resized.json()["installments"]] == [
+        3333, 5000, 5000, 5000
+    ]
+    assert [item["sequence"] for item in resized.json()["installments"]] == [1, 2, 3, 4]
+    assert [item["total_count"] for item in resized.json()["installments"]] == [3, 4, 4, 4]
+    removed_invoice_ids = {item["invoice_id"] for item in resized.json()["installments"][2:]}
+    shortened = client.patch(
+        f"{root}/card-purchases/{purchase.json()['id']}/remaining",
+        headers=headers,
+        json={
+            "installment_amount_cents": 7000,
+            "remaining_installment_count": 1,
+            "category_id": category["id"],
+            "subcategory_id": sub["id"],
+            "note": "Só uma restante",
+        },
+    )
+    assert shortened.status_code == 200, shortened.text
+    assert [item["amount_cents"] for item in shortened.json()["installments"]] == [3333, 7000]
+    assert [item["sequence"] for item in shortened.json()["installments"]] == [1, 2]
+    assert shortened.json()["installments"][0]["created_at"]
+    listed_invoices = client.get(f"{root}/invoices", headers=headers).json()
+    assert not removed_invoice_ids.intersection(item["id"] for item in listed_invoices)
     locked = client.get(f"{root}/invoices/{invoice_id}", headers=headers).json()
     assert locked["total_cents"] == 3333
     blocked = client.post(

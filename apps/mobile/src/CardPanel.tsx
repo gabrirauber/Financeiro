@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Switch, Text, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, Switch, Text, TextInput, View } from 'react-native';
 import { request, Workspace } from './api';
 import { Account, Category, CreditCard, Invoice, Subcategory, dateToDisplay, dateToIso, monthIso } from './finance';
 import { localDate, money, parseCents } from './prototype';
@@ -40,7 +40,8 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
   const setNotice = useToastSetter('success');
   const [busy, setBusy] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<string>();
-  const [remainingAmount, setRemainingAmount] = useState('');
+  const [installmentAmount, setInstallmentAmount] = useState('');
+  const [remainingCount, setRemainingCount] = useState('');
   const [remainingNote, setRemainingNote] = useState('');
   const [partialOpen, setPartialOpen] = useState(false);
   const [partialAmount, setPartialAmount] = useState('600,00');
@@ -190,24 +191,31 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
   function startCorrection(purchaseId: string) {
     const editable = invoices.flatMap(invoice => invoice.installments)
       .filter(item => item.purchase_id === purchaseId &&
-        !item.invoice_paid && item.invoice_month.slice(0, 7) >= monthIso(new Date()));
+        !item.invoice_paid && item.invoice_month.slice(0, 7) >= monthIso(new Date()))
+      .sort((a, b) => a.sequence - b.sequence);
+    if (!editable.length) return setError('Esta compra não tem parcelas atuais ou futuras para corrigir.');
     setEditingPurchase(purchaseId);
-    setRemainingAmount((editable.reduce((sum, item) => sum + item.amount_cents, 0) / 100)
-      .toFixed(2).replace('.', ','));
+    setInstallmentAmount(centsToInput(editable[0].amount_cents));
+    setRemainingCount(String(editable.length));
     setRemainingNote(editable[0]?.note || '');
   }
   async function saveCorrection() {
     const editable = invoices.flatMap(invoice => invoice.installments)
       .find(item => item.purchase_id === editingPurchase && !item.invoice_paid);
-    const cents = parseCents(remainingAmount);
-    if (!editable || !cents) return setError('Informe um valor válido para as parcelas restantes.');
+    const cents = parseCents(installmentAmount);
+    const count = Number(remainingCount);
+    if (!editable || !cents) return setError('Informe o valor de cada parcela.');
+    if (!Number.isInteger(count) || count < 1 || count > 120)
+      return setError('Informe de 1 a 120 parcelas restantes.');
+    if (cents * count > 999999999) return setError('O valor total excede o permitido.');
     setBusy(true); setError('');
     try {
       await request(`${root}/card-purchases/${editingPurchase}/remaining`, token, 'PATCH', {
-        remaining_total_cents: cents, category_id: editable.category_id,
+        installment_amount_cents: cents, remaining_installment_count: count,
+        category_id: editable.category_id,
         subcategory_id: editable.subcategory_id, note: remainingNote.trim(),
       });
-      setEditingPurchase(undefined); setNotice('Parcelas atuais e futuras corrigidas. O passado foi preservado.');
+      setEditingPurchase(undefined); setNotice('Valor e quantidade das parcelas restantes atualizados.');
       await load(); refresh();
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível corrigir as parcelas.'); }
     finally { setBusy(false); }
@@ -251,17 +259,25 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
           <Text style={label()}>Faturas parceladas · {item.sequence}/{item.total_count}</Text>
           <Text style={muted()}>Principal {money(item.principal_cents)} · encargos {money(item.fee_cents)} · total {money(item.amount_cents)}</Text>
         </View>)}
-        {current.installments.map(item => <View key={item.id} style={{ paddingVertical: 9, borderTopWidth: 1, borderColor: palette.line }}>
-          <Text style={label()}>{item.note || 'Compra no crédito'} · {item.sequence}/{item.total_count}</Text>
-          <Text style={muted()}>{dateToDisplay(item.purchased_on)} · {money(item.amount_cents)}</Text>
-          {!item.invoice_paid && <Button secondary label="Corrigir parcelas atuais e futuras"
-            onPress={() => startCorrection(item.purchase_id)} />}
+        {[...current.installments].sort((a, b) =>
+          b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)).map(item =>
+          <View key={item.id} style={{ paddingVertical: 9, borderTopWidth: 1, borderColor: palette.line }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Abrir compra ${item.note || 'no crédito'}`}
+            onPress={() => { Keyboard.dismiss(); startCorrection(item.purchase_id); }} style={{ gap: 3 }}>
+            <Text style={label()}>{item.note || 'Compra no crédito'} · {item.sequence}/{item.total_count}</Text>
+            <Text style={muted()}>{dateToDisplay(item.purchased_on)} · {money(item.amount_cents)}{item.invoice_paid ? ' · parcela já paga' : ''}</Text>
+          </Pressable>
           {editingPurchase === item.purchase_id && <Card>
             <Text style={label()}>Corrigir parcelas não pagas</Text>
-            <Text style={muted()}>Digite o novo total das parcelas atuais e futuras. O app redistribui esse valor; faturas pagas e meses anteriores permanecem intactos.</Text>
-            <Text style={label()}>Novo total restante (R$)</Text>
-            <MoneyInput accessibilityLabel="Novo total restante das parcelas" style={input()} autoFocus
-              value={remainingAmount} onChangeText={setRemainingAmount} />
+            <Text style={muted()}>Informe quanto será cada parcela e quantas ainda faltam, incluindo a desta fatura. Parcelas anteriores ou já pagas permanecem intactas.</Text>
+            <Text style={label()}>Valor de cada parcela (R$)</Text>
+            <MoneyInput accessibilityLabel="Novo valor de cada parcela" style={input()}
+              value={installmentAmount} onChangeText={setInstallmentAmount} />
+            <Text style={label()}>Quantidade de parcelas restantes</Text>
+            <TextInput accessibilityLabel="Quantidade de parcelas restantes da compra" style={input()}
+              keyboardType="number-pad" maxLength={3} value={remainingCount} onChangeText={setRemainingCount} />
+            {!!parseCents(installmentAmount) && Number(remainingCount) > 0 &&
+              <Text style={muted()}>Novo total a lançar: {money(parseCents(installmentAmount)! * Number(remainingCount))}.</Text>}
             <Button label={busy ? 'Salvando…' : 'Salvar correção'}
               onPress={() => { if (!busy) void saveCorrection(); }} />
             <Button label="Cancelar" secondary onPress={() => setEditingPurchase(undefined)} />
@@ -339,13 +355,13 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
           <Text style={label()}>Categoria *</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{categories.filter(item => item.active).map(item =>
             <Chip key={item.id} label={item.name} selected={legacyCategory === item.id}
-              onPress={() => { setLegacyCategory(item.id); setLegacySubcategory(''); }} />)}</View>
+              onPress={() => { Keyboard.dismiss(); setLegacyCategory(item.id); setLegacySubcategory(''); }} />)}</View>
           <CategoryCreator kind="categoria" existing={categories.map(item => item.name)} onCreate={createLegacyCategory} />
           <Text style={label()}>Subcategoria *</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{selectedLegacyCategory
             ?.subcategories.filter(item => item.active).map(item =>
               <Chip key={item.id} label={item.name} selected={legacySubcategory === item.id}
-                onPress={() => setLegacySubcategory(item.id)} />)}</View>
+                onPress={() => { Keyboard.dismiss(); setLegacySubcategory(item.id); }} />)}</View>
           {selectedLegacyCategory?.active && <CategoryCreator key={selectedLegacyCategory.id} kind="subcategoria" existing={selectedLegacyCategory.subcategories.map(item => item.name)} onCreate={createLegacySubcategory} />}
           <Text style={label()}>Observação (opcional)</Text>
           <TextInput accessibilityLabel="Observação da compra antiga" style={input()} value={legacyNote}

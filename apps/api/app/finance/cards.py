@@ -53,7 +53,9 @@ class PurchaseInput(BaseModel):
 
 
 class RemainingInput(BaseModel):
-    remaining_total_cents: int = Field(gt=0, le=MAX_CENTS)
+    remaining_total_cents: int | None = Field(default=None, gt=0, le=MAX_CENTS)
+    installment_amount_cents: int | None = Field(default=None, gt=0, le=MAX_CENTS)
+    remaining_installment_count: int | None = Field(default=None, ge=1, le=120)
     category_id: UUID
     subcategory_id: UUID
     note: str = Field(default="", max_length=200)
@@ -108,6 +110,7 @@ def serialize_installment(row, purchase, invoice, card, settled=False):
         "invoice_month": invoice.month,
         "invoice_paid": invoice.paid_on is not None or settled,
         "purchased_on": purchase.purchased_on,
+        "created_at": purchase.created_at,
         "legacy": purchase.legacy,
         "sequence": row.sequence,
         "total_count": row.total_count,
@@ -502,33 +505,91 @@ def edit_remaining(
     ]
     if not editable:
         raise HTTPException(409, "Esta compra não tem parcelas atuais ou futuras não pagas.")
-    if data.remaining_total_cents < len(editable):
-        raise HTTPException(422, "O valor precisa cobrir ao menos um centavo por parcela.")
+    changing_count = data.remaining_installment_count is not None
+    if changing_count:
+        if data.installment_amount_cents is None or data.remaining_total_cents is not None:
+            raise HTTPException(422, "Informe o valor e a quantidade das parcelas restantes.")
+        amount = data.installment_amount_cents
+        count = data.remaining_installment_count
+        if amount * count > MAX_CENTS:
+            raise HTTPException(422, "O valor total excede o permitido.")
+        if editable[0][0].sequence + count - 1 > 120:
+            raise HTTPException(422, "Número de parcelas inválido.")
+        if any(
+            item.sequence > editable[0][0].sequence and (item, invoice) not in editable
+            for item, invoice in rows
+        ):
+            raise HTTPException(409, "Há parcelas futuras pagas nesta compra.")
+        remaining_total = amount * count
+    else:
+        if data.remaining_total_cents is None or data.installment_amount_cents is not None:
+            raise HTTPException(422, "Informe o novo total das parcelas restantes.")
+        remaining_total = data.remaining_total_cents
+        count = len(editable)
+        if remaining_total < count:
+            raise HTTPException(422, "O valor precisa cobrir ao menos um centavo por parcela.")
     category = category_or_404(db, workspace_id, data.category_id)
     sub = subcategory_or_404(db, category.id, data.subcategory_id)
     if not category.active or not sub.active:
         raise HTTPException(422, "Escolha uma categoria e subcategoria ativas.")
-    parts = split_cents(data.remaining_total_cents, len(editable))
-    for (item, invoice), cents in zip(editable, parts):
-        if invoice_total(db, invoice.id) - item.amount_cents + cents < invoice_advance_total(
-            db, invoice.id
-        ):
+    parts = [amount] * count if changing_count else split_cents(remaining_total, count)
+    old_by_month = {invoice.month: item for item, invoice in editable}
+    first_month = editable[0][1].month
+    targets = []
+    for index, cents in enumerate(parts):
+        try:
+            month = shift_month(first_month, index)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        invoice = ensure_invoice(db, card, month, today(workspace))
+        if invoice_settled(db, invoice, today(workspace)):
+            raise HTTPException(409, "Uma das novas faturas já foi paga.")
+        targets.append((invoice, old_by_month.get(month), cents))
+    cutoff = shift_month(first_month, count)
+    removed = [(item, invoice) for item, invoice in editable if invoice.month >= cutoff]
+    affected = [(invoice, item, cents) for invoice, item, cents in targets]
+    affected.extend((invoice, item, 0) for item, invoice in removed)
+    for invoice, item, cents in affected:
+        revised_total = invoice_total(db, invoice.id) - (item.amount_cents if item else 0) + cents
+        if revised_total < invoice_advance_total(db, invoice.id):
             raise HTTPException(
                 422, "A correção não pode deixar a fatura abaixo do valor antecipado."
             )
-    for (item, _), cents in zip(editable, parts):
+    for item, _ in removed:
+        db.delete(item)
+    total_count = editable[0][0].sequence + count - 1
+    for index, (invoice, item, cents) in enumerate(targets):
+        if item is None:
+            item = CardInstallment(purchase_id=purchase.id, invoice_id=invoice.id,
+                                   sequence=editable[0][0].sequence + index,
+                                   total_count=total_count, amount_cents=cents,
+                                   category_id=category.id, subcategory_id=sub.id,
+                                   note=data.note.strip())
+            db.add(item)
+            continue
         item.amount_cents = cents
+        item.total_count = total_count
         item.category_id = category.id
         item.subcategory_id = sub.id
         item.note = data.note.strip()
     purchase.total_cents = (
         sum(item.amount_cents for item, invoice in rows if (item, invoice) not in editable)
-        + data.remaining_total_cents
+        + remaining_total
     )
+    db.flush()
+    for _, invoice in removed:
+        if not invoice.paid_on and invoice_total(db, invoice.id) == 0:
+            db.delete(invoice)
     db.commit()
+    updated = db.execute(
+        select(CardInstallment, Invoice)
+        .join(Invoice, CardInstallment.invoice_id == Invoice.id)
+        .where(CardInstallment.purchase_id == purchase.id)
+        .order_by(CardInstallment.sequence)
+    ).all()
     return {
         "id": purchase.id,
         "installments": [
-            serialize_installment(item, purchase, invoice, card) for item, invoice in rows
+            serialize_installment(item, purchase, invoice, card) for item, invoice in updated
         ],
     }
