@@ -28,7 +28,20 @@ def build_engine(settings: Settings):
     )
 
 
-def database_ready(engine) -> bool:
+def database_ready(engine, require_access_admin: bool = False) -> bool:
     with engine.connect() as connection:
         version = connection.scalar(select(AppMetadata.value).where(AppMetadata.key == "schema"))
-        return version == "e08"
+        if version != "e11":
+            return False
+        if require_access_admin:
+            from app.identity.models import User
+
+            admin_id = connection.scalar(
+                select(User.id).where(
+                    User.email == "gabrirauber@gmail.com",
+                    User.is_access_admin.is_(True),
+                    User.access_status == "approved",
+                ).limit(1)
+            )
+            return admin_id is not None
+        return True

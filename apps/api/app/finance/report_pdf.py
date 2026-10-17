@@ -20,12 +20,12 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-INK = colors.HexColor("#23342F")
-GREEN = colors.HexColor("#285B49")
-MUTED = colors.HexColor("#687873")
-LINE = colors.HexColor("#DEE5DF")
-PALE = colors.HexColor("#F4F6F2")
-RED = colors.HexColor("#A34131")
+INK = colors.HexColor("#0C2747")
+GREEN = colors.HexColor("#123A62")
+MUTED = colors.HexColor("#52677E")
+LINE = colors.HexColor("#DCE5EF")
+PALE = colors.HexColor("#F6F8FC")
+RED = colors.HexColor("#B63F32")
 
 
 def fonts():
@@ -107,7 +107,7 @@ def footer(canvas, document):
     canvas.line(42, 39, width - 42, 39)
     canvas.setFont("Vera", 7)
     canvas.setFillColor(MUTED)
-    canvas.drawString(42, 27, "financeiro.  |  Relatório pessoal")
+    canvas.drawString(42, 27, "Rautto  |  Relatório pessoal")
     canvas.drawRightString(width - 42, 27, f"Página {document.page}")
     canvas.restoreState()
 
@@ -123,9 +123,9 @@ def render_monthly_pdf(data, detail=False):
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=42, rightMargin=42,
                             topMargin=40, bottomMargin=58,
                             title=f"Relatório financeiro - {month:%m/%Y}",
-                            author="Financeiro")
+                            author="Rautto")
     story = [
-        paragraph("financeiro.", styles["title"]),
+        paragraph("Rautto", styles["title"]),
         paragraph(f"{data['workspace_name']}  |  {month:%m/%Y}  |  Gerado em "
                   f"{date_label(data['generated_at'])}", styles["subtitle"]),
         Spacer(1, 14),

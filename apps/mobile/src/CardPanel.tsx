@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Keyboard, Pressable, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, Keyboard, Platform, Pressable, Switch, Text, TextInput, View } from 'react-native';
 import { request, Workspace } from './api';
 import { Account, Category, CreditCard, Invoice, Subcategory, dateToDisplay, dateToIso, monthIso } from './finance';
 import { localDate, money, parseCents } from './prototype';
@@ -59,6 +59,7 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
       request<Category[]>(`${root}/categories`, token),
     ]);
     setCards(allCards); setInvoices(allInvoices); setAccounts(allAccounts); setCategories(allCategories);
+    setSelected(current => current && allInvoices.some(invoice => invoice.id === current) ? current : undefined);
     setPayAccount(current => current || allAccounts.find(a => a.kind === 'bank')?.id || '');
   }
   useEffect(() => { void load().catch(e => setError(e instanceof Error ? e.message : 'Não foi possível carregar os cartões.')); }, [root, token]);
@@ -220,6 +221,33 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível corrigir as parcelas.'); }
     finally { setBusy(false); }
   }
+  function confirmDeletePurchase() {
+    if (!editingPurchase || busy) return;
+    const purchaseId = editingPurchase;
+    const installments = invoices.flatMap(invoice => invoice.installments)
+      .filter(item => item.purchase_id === purchaseId);
+    const hasProtected = installments.some(item =>
+      item.invoice_paid || item.invoice_month.slice(0, 7) < monthIso(new Date()));
+    const message = hasProtected
+      ? 'Excluir as parcelas atuais e futuras não pagas? As parcelas anteriores ou já pagas serão preservadas.'
+      : 'Excluir esta compra e todas as suas parcelas das faturas?';
+    const remove = () => { void deletePurchase(purchaseId); };
+    if (Platform.OS === 'web') { if (window.confirm(message)) remove(); }
+    else Alert.alert('Excluir compra', message, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Excluir', style: 'destructive', onPress: remove },
+    ]);
+  }
+  async function deletePurchase(purchaseId: string) {
+    setBusy(true); setError('');
+    try {
+      await request(`${root}/card-purchases/${purchaseId}`, token, 'DELETE');
+      setEditingPurchase(undefined);
+      setNotice('Parcelas atuais e futuras não pagas excluídas.');
+      await load(); refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível excluir a compra.'); }
+    finally { setBusy(false); }
+  }
   const cardForm = <Card>
         <Text style={label()}>{editingCard ? 'Editar cartão' : 'Novo cartão'}</Text>
         {editingCard && <Text style={muted()}>As faturas já criadas manterão suas datas. Novas compras usarão os dias atualizados.</Text>}
@@ -280,6 +308,7 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
               <Text style={muted()}>Novo total a lançar: {money(parseCents(installmentAmount)! * Number(remainingCount))}.</Text>}
             <Button label={busy ? 'Salvando…' : 'Salvar correção'}
               onPress={() => { if (!busy) void saveCorrection(); }} />
+            <Button label="Excluir compra" secondary onPress={confirmDeletePurchase} disabled={busy} />
             <Button label="Cancelar" secondary onPress={() => setEditingPurchase(undefined)} />
           </Card>}
         </View>)}

@@ -129,6 +129,17 @@ def test_card_installments_and_invoice_payment(client):
     assert not removed_invoice_ids.intersection(item["id"] for item in listed_invoices)
     locked = client.get(f"{root}/invoices/{invoice_id}", headers=headers).json()
     assert locked["total_cents"] == 3333
+    deleted = client.delete(
+        f"{root}/card-purchases/{purchase.json()['id']}", headers=headers
+    )
+    assert deleted.status_code == 204, deleted.text
+    assert client.get(f"{root}/invoices/{invoice_id}", headers=headers).json()[
+        "total_cents"
+    ] == 3333
+    assert all(
+        invoice["month"] == month + "-01"
+        for invoice in client.get(f"{root}/invoices", headers=headers).json()
+    )
     blocked = client.post(
         f"{root}/card-purchases",
         headers=headers,
@@ -195,6 +206,42 @@ def test_legacy_and_remaining_edit_keep_past(client):
     )
     assert updated.status_code == 200, updated.text
     assert [x["amount_cents"] for x in updated.json()["installments"]] == [2500, 2501]
+
+
+def test_delete_card_purchase_and_protect_advance(client):
+    headers, space = setup(client)
+    root = f"/workspaces/{space}"
+    bank = account(client, headers, space, "Banco", 10000)
+    category = client.get(f"{root}/categories", headers=headers).json()[0]
+    sub = category["subcategories"][0]
+    card = client.post(f"{root}/cards", headers=headers, json={
+        "name": "Cartão", "closing_day": 31, "due_day": 31,
+        "closing_day_next_bill": False,
+    }).json()
+    payload = {
+        "card_id": card["id"], "category_id": category["id"],
+        "subcategory_id": sub["id"], "purchased_on": today(),
+        "total_cents": 5000, "installment_count": 2,
+    }
+    first = client.post(f"{root}/card-purchases", headers=headers, json=payload)
+    assert first.status_code == 201, first.text
+    invoice_id = first.json()["installments"][0]["invoice_id"]
+    removed = client.delete(f"{root}/card-purchases/{first.json()['id']}", headers=headers)
+    assert removed.status_code == 204, removed.text
+    assert client.get(f"{root}/invoices", headers=headers).json() == []
+
+    second = client.post(f"{root}/card-purchases", headers=headers, json=payload)
+    assert second.status_code == 201, second.text
+    invoice_id = second.json()["installments"][0]["invoice_id"]
+    advance = client.post(f"{root}/invoices/{invoice_id}/advance", headers=headers,
+                          json={"account_id": bank, "amount_cents": 1000,
+                                "request_id": "before-delete"})
+    assert advance.status_code == 200, advance.text
+    blocked = client.delete(f"{root}/card-purchases/{second.json()['id']}", headers=headers)
+    assert blocked.status_code == 422, blocked.text
+    assert client.get(f"{root}/invoices/{invoice_id}", headers=headers).json()[
+        "total_cents"
+    ] == 2500
 
 
 def test_edit_card_keeps_existing_invoice_dates(client):

@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)
 
     app_env: Literal["development", "test", "production"] = "development"
+    access_approval_enabled: bool = False
     database_url: SecretStr
     smtp_host: str = ""
     smtp_port: int = 465
@@ -51,3 +52,7 @@ class Settings(BaseSettings):
     @property
     def sqlalchemy_url(self):
         return make_url(self.database_url.get_secret_value()).set(drivername="postgresql+psycopg")
+
+    @property
+    def approval_required(self) -> bool:
+        return self.app_env == "production" or self.access_approval_enabled

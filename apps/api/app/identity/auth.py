@@ -71,7 +71,8 @@ def register(data: Registration, request: Request, response: Response, db: Db):
     if data.invite_code and data.workspace_name:
         raise HTTPException(422, "Escolha criar seu espaço ou entrar com um código.")
     user = User(
-        email=normalize(data.email), password_hash=passwords.hash(data.password.get_secret_value())
+        email=normalize(data.email), password_hash=passwords.hash(data.password.get_secret_value()),
+        access_status="pending" if request.app.state.settings.approval_required else "approved",
     )
     db.add(user)
     try:
@@ -88,7 +89,10 @@ def register(data: Registration, request: Request, response: Response, db: Db):
             db.flush()
             db.add(Membership(workspace_id=workspace.id, user_id=user.id, role="admin"))
             seed_categories(db, workspace.id)
-        result = create_session(db, user.id)
+        result = (
+            {"status": "pending"}
+            if user.access_status == "pending" else create_session(db, user.id)
+        )
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -106,6 +110,12 @@ def login(data: Credentials, request: Request, response: Response, db: Db):
     )
     if not user or not correct:
         raise HTTPException(401, "E-mail ou senha inválidos.")
+    if user.access_status == "pending":
+        raise HTTPException(403, "Seu cadastro aguarda aprovação para acessar o Rautto.")
+    if user.access_status == "rejected":
+        raise HTTPException(403, "Seu pedido de acesso não foi aprovado.")
+    if user.access_status == "revoked":
+        raise HTTPException(403, "Seu acesso ao Rautto foi revogado.")
     result = create_session(db, user.id)
     db.commit()
     response.headers["Cache-Control"] = "no-store"
@@ -114,7 +124,8 @@ def login(data: Credentials, request: Request, response: Response, db: Db):
 
 @router.get("/me")
 def me(user: CurrentUser):
-    return {"id": user.id, "email": user.email}
+    return {"id": user.id, "email": user.email,
+            "access_admin": user.is_access_admin}
 
 
 @router.post("/logout", status_code=204)

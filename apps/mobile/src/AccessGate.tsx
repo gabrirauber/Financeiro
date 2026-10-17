@@ -10,13 +10,14 @@ import { useToastSetter } from './Toast';
 import { saveOnboardingStep } from './onboardingProgress';
 
 const input = () => ({ backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink });
-export function AccessGate({ children, theme, onToggleTheme }: { children: (workspace: Workspace, token: string, userId: string, openMembers: () => void, logout: () => void) => React.ReactNode; theme: ThemeMode; onToggleTheme: () => void }) {
+export function AccessGate({ children, theme, onToggleTheme }: { children: (workspace: Workspace, token: string, userId: string, accessAdmin: boolean, openMembers: () => void, logout: () => void) => React.ReactNode; theme: ThemeMode; onToggleTheme: () => void }) {
   const [token, setToken] = useState<string>();
   const tokenRef = useRef<string | undefined>(undefined);
   function activate(value: string) { tokenRef.current = value; setToken(value); }
   const [user, setUser] = useState<User>();
   const [selected, setSelected] = useState<Workspace>();
   const [register, setRegister] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState(false);
   const [managing, setManaging] = useState(false);
   const [recover, setRecover] = useState(false);
   const [resetToken, setResetToken] = useState<string>();
@@ -91,10 +92,16 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
 
   async function authenticate() {
     await run(async () => {
-      const result = await request<{ token: string }>(register ? '/auth/register' : '/auth/login', undefined, 'POST', {
+      const result = await request<{ token?: string; status?: 'pending' }>(register ? '/auth/register' : '/auth/login', undefined, 'POST', {
         email: email.trim(), password,
         ...(register ? (code.trim() ? {invite_code: code.trim()} : {workspace_name: 'Minhas finanças'}) : {}),
       });
+      if (result.status === 'pending') {
+        setPendingMessage(true); setRegister(false); setPassword(''); setCode('');
+        return;
+      }
+      if (!result.token) throw new Error('Não foi possível iniciar a sessão. Tente novamente.');
+      setPendingMessage(false);
       await saveSession(result.token); activate(result.token); setPassword('');
       setCode('');
       await load(result.token, register);
@@ -108,11 +115,11 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
   }
 
   if (selected && user && token) return <View style={{ flex: 1, backgroundColor: palette.bg }}>
-    {children(selected, token, user.id, () => setManaging(true), () => { void logout(); })}
+    {children(selected, token, user.id, user.access_admin, () => setManaging(true), () => { void logout(); })}
     <Modal visible={managing} animationType="slide" onRequestClose={() => setManaging(false)}>
       <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:20, maxWidth:560, width:'100%', alignSelf:'center', gap:16}}>
-          <MembersPanel workspace={selected} token={token} onClose={() => setManaging(false)} onChanged={() => load(token)} />
+          <MembersPanel workspace={selected} token={token} accessAdmin={user.access_admin} onClose={() => setManaging(false)} onChanged={() => load(token)} />
         </ScrollView>
       </SafeAreaView>
     </Modal>
@@ -121,14 +128,15 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
   return <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 24, gap: 16, width: '100%', maxWidth: 560, alignSelf: 'center' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Image source={require('../assets/meu-controle-icon-concept-v2.png')} style={{ width: 48, height: 48, borderRadius: 13 }} />
-        <Text style={{ flex: 1, fontSize: 26, fontWeight: '800', color: palette.ink }}>Meu Controle</Text>
+        <Image source={require('../assets/rautto-logo.png')} accessibilityLabel="Logo Rautto" resizeMode="contain" style={{ width: 62, height: 58, borderRadius: 12, backgroundColor: '#FFFFFF' }} />
+        <Text style={{ flex: 1, fontSize: 26, fontWeight: '800', color: palette.ink }}>Rautto</Text>
         <Pressable accessibilityRole="switch" aria-checked={theme === 'dark'} accessibilityLabel="Modo escuro" onPress={onToggleTheme}
           style={{ minHeight: 44, paddingHorizontal: 10, borderRadius: 12, backgroundColor: palette.soft, justifyContent: 'center' }}>
           <Text style={{ color: palette.ink, fontSize: 12, fontWeight: '700' }}>{theme === 'dark' ? '☀ Claro' : '☾ Escuro'}</Text>
         </Pressable>
       </View>
       <Text style={{ color: palette.muted }}>Organize suas contas e acompanhe seu mês.</Text>
+      {pendingMessage && <Card><Text style={{ color: palette.ink, fontWeight: '700' }}>Cadastro enviado para aprovação</Text><Text style={{ color: palette.muted }}>Você poderá entrar depois que o administrador liberar seu acesso. Volte aqui e use Entrar com seu e-mail e senha.</Text></Card>}
       {busy ? <Text accessibilityLiveRegion="polite">Aguarde…</Text> : null}
       {!user ? <Card>
         <Text style={{ fontSize: 22, color: palette.ink }}>{register ? 'Crie seu acesso' : 'Boas-vindas'}</Text>

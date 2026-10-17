@@ -1,13 +1,16 @@
 {
   "expo": {
-    "name": "Meu Controle",
+    "name": "Rautto",
     "slug": "financeiro-prototipo",
     "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "./assets/meu-controle-icon-concept-v2.png",
+    "icon": "./assets/rautto-logo.png",
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.gabrirauber.financeiro"
+    },
+    "web": {
+      "favicon": "./assets/rautto-logo.png"
     },
     "scheme": "financeiro",
     "plugins": [

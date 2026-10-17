@@ -1,4 +1,4 @@
-export type User = { id: string; email: string };
+export type User = { id: string; email: string; access_admin: boolean };
 export type Workspace = { id: string; name: string; role: 'admin' | 'member' };
 export type Member = User & { role: 'admin' | 'member' };
 

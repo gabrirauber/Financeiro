@@ -2,8 +2,18 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 export type ThemeMode = 'light' | 'dark';
-const light = { bg: '#F6F5F0', ink: '#20362F', muted: '#66766E', green: '#285B49', line: '#E0E5DD', white: '#FFFFFF', soft: '#E9EFE8', track: '#F0F1EB', danger: '#AA422E' };
-const dark = { bg: '#111B18', ink: '#EEF5EF', muted: '#B1C2B8', green: '#91D5AF', line: '#34473D', white: '#1C2A24', soft: '#293B31', track: '#34473D', danger: '#F4A28F' };
+const light = {
+  bg: '#F6F8FC', ink: '#0C2747', muted: '#52677E', green: '#123A62',
+  accent: '#E9650B', line: '#DCE5EF', white: '#FFFFFF', soft: '#E8F0F8',
+  track: '#E8EDF3', danger: '#B63F32', hero: '#0C2B4D', bank: '#123A62',
+  heroMuted: '#D8E9F8', heroLine: '#40617F',
+};
+const dark = {
+  bg: '#0B1523', ink: '#F3F7FC', muted: '#B4C5D8', green: '#FF9C45',
+  accent: '#FF9C45', line: '#344A63', white: '#15263B', soft: '#223851',
+  track: '#2C4058', danger: '#FFA297', hero: '#102B48', bank: '#1B3856',
+  heroMuted: '#D9E8F6', heroLine: '#4A6785',
+};
 export const palette = { ...light };
 export function applyTheme(mode: ThemeMode) { Object.assign(palette, mode === 'dark' ? dark : light); }
 const makeStyles = () => StyleSheet.create({

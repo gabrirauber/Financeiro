@@ -11,8 +11,8 @@ export type PieSegment = {
   onPress?: () => void;
 };
 
-const lightColors = ['#246D54', '#A75132', '#425F9D', '#8A4B8F', '#8A681C', '#177577', '#A54463', '#536F2E'];
-const darkColors = ['#91D5AF', '#FFB18A', '#A8BEFF', '#E1B0EB', '#F0D27A', '#7DDDDD', '#F4A4BA', '#C8DA8F'];
+const lightColors = ['#123A62', '#E9650B', '#29699A', '#B64D2C', '#4765A5', '#B16A17', '#5A75A0', '#D65D53'];
+const darkColors = ['#83B9EA', '#FF9C45', '#73D0E7', '#FFBE78', '#A6AEFF', '#F3C779', '#9EC6E7', '#F7A6A0'];
 
 export function chartColor(index: number, theme: ThemeMode) {
   const colors = theme === 'dark' ? darkColors : lightColors;

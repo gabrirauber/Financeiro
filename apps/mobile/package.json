@@ -1,6 +1,6 @@
 {
   "name": "financeiro-mobile",
-  "description": "Prototipo E01 com dados ficticios em memoria",
+  "description": "Aplicativo de controle financeiro Rautto",
   "license": "0BSD",
   "version": "0.1.0",
   "packageManager": "pnpm@11.25.0",

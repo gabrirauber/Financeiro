@@ -30,6 +30,8 @@ def current_user(
     user = db.scalar(select(User).where(User.id == session.user_id))
     if user is None:
         raise HTTPException(401, "Entre novamente.")
+    if user.access_status != "approved":
+        raise HTTPException(401, "Seu acesso não está ativo. Entre novamente após a aprovação.")
     return user
 
 

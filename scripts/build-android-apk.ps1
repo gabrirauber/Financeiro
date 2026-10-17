@@ -15,7 +15,7 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $mobileRoot = Join-Path $repoRoot 'apps\mobile'
 $buildRoot = [IO.Path]::GetFullPath($BuildRoot)
 $outputDir = Join-Path $repoRoot 'output'
-$apkOutput = Join-Path $outputDir 'MeuControle-teste.apk'
+$apkOutput = Join-Path $outputDir 'Rautto-teste.apk'
 
 if ($buildRoot -eq [IO.Path]::GetPathRoot($buildRoot) -or
     $buildRoot.StartsWith($repoRoot + [IO.Path]::DirectorySeparatorChar,

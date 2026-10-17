@@ -17,6 +17,7 @@ from app.finance.card_models import (
 from app.finance.categories import category_or_404, subcategory_or_404
 from app.finance.cycles import cycle_for_due_month, first_cycle, shift_month, split_cents
 from app.finance.models import Movement
+from app.finance.recurrence_models import RecurringOccurrence
 from app.finance.routes import MAX_CENTS, account_or_404, require_after_opening, today
 from app.identity.dependencies import CurrentUser, Db
 from app.identity.workspaces import require_member
@@ -593,3 +594,56 @@ def edit_remaining(
             serialize_installment(item, purchase, invoice, card) for item, invoice in updated
         ],
     }
+
+
+@router.delete("/card-purchases/{purchase_id}", status_code=204)
+def delete_purchase_remaining(
+    workspace_id: UUID, purchase_id: UUID, db: Db, user: CurrentUser
+):
+    workspace, _ = require_member(db, workspace_id, user.id, lock=True)
+    purchase = db.get(CardPurchase, purchase_id)
+    if purchase is None:
+        raise HTTPException(404, "Compra não encontrada.")
+    card_or_404(db, workspace_id, purchase.card_id)
+    rows = db.execute(
+        select(CardInstallment, Invoice)
+        .join(Invoice, CardInstallment.invoice_id == Invoice.id)
+        .where(CardInstallment.purchase_id == purchase.id)
+        .order_by(CardInstallment.sequence)
+    ).all()
+    current = today(workspace)
+    current_month = current.replace(day=1)
+    removable = [
+        (item, invoice) for item, invoice in rows
+        if invoice.month >= current_month and not invoice_settled(db, invoice, current)
+    ]
+    if not removable:
+        raise HTTPException(409, "Esta compra não tem parcelas atuais ou futuras não pagas.")
+    removed_by_invoice = {}
+    for item, invoice in removable:
+        removed_by_invoice[invoice.id] = removed_by_invoice.get(invoice.id, 0) + item.amount_cents
+    affected_invoices = {invoice.id: invoice for _, invoice in removable}
+    for invoice_id, amount in removed_by_invoice.items():
+        if invoice_total(db, invoice_id) - amount < invoice_advance_total(db, invoice_id):
+            raise HTTPException(
+                422, "A exclusão não pode deixar a fatura abaixo do valor antecipado."
+            )
+    for item, _ in removable:
+        db.delete(item)
+    kept_total = sum(item.amount_cents for item, invoice in rows if
+                     (item, invoice) not in removable)
+    occurrence = db.scalar(select(RecurringOccurrence).where(
+        RecurringOccurrence.purchase_id == purchase.id
+    ))
+    if kept_total or occurrence:
+        # A ocorrência permanece vinculada para não lançar a mesma assinatura novamente.
+        purchase.total_cents = kept_total
+    else:
+        db.delete(purchase)
+    db.flush()
+    for invoice in affected_invoices.values():
+        if not invoice.paid_on and invoice_total(db, invoice.id) == 0 and not db.scalar(
+            select(InvoiceFinancing.id).where(InvoiceFinancing.source_invoice_id == invoice.id)
+        ):
+            db.delete(invoice)
+    db.commit()

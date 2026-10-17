@@ -10,10 +10,10 @@ from app.identity.workspaces import require_member
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["categories"])
 DEFAULTS = (
-    ("Casa", "#315F51", ("Aluguel", "Internet", "Energia")),
-    ("Alimentação", "#BE6D45", ("Mercado", "Restaurantes", "Café")),
-    ("Transporte", "#647CAB", ("Combustível", "Aplicativos", "Transporte público")),
-    ("Lazer", "#A77EAC", ("Passeios", "Streaming", "Compras")),
+    ("Casa", "#123A62", ("Aluguel", "Internet", "Energia")),
+    ("Alimentação", "#E9650B", ("Mercado", "Restaurantes", "Café")),
+    ("Transporte", "#29699A", ("Combustível", "Aplicativos", "Transporte público")),
+    ("Lazer", "#B64D2C", ("Passeios", "Streaming", "Compras")),
 )
 
 

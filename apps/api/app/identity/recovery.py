@@ -29,7 +29,7 @@ def smtp_sender(settings, email: str, link: str):
     message = EmailMessage()
     message["From"] = settings.smtp_from
     message["To"] = email
-    message["Subject"] = "Recuperação de acesso — Financeiro"
+    message["Subject"] = "Recuperação de acesso — Rautto"
     message.set_content(
         "Use o link abaixo para definir uma nova senha. Ele expira em 15 minutos "
         "e só pode ser usado uma vez. Se não solicitou, ignore esta mensagem.\n\n" + link

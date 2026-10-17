@@ -163,6 +163,12 @@ def test_card_subscription_once_per_month(client):
     assert first[0]["purchase_id"] is not None
     invoices = client.get(f"{root}/invoices?card_id={card}", headers=headers).json()
     assert sum(len(invoice["installments"]) for invoice in invoices) == 1
+    deleted = client.delete(f"{root}/card-purchases/{first[0]['purchase_id']}", headers=headers)
+    assert deleted.status_code == 204, deleted.text
+    run_recurring()
+    after = client.get(f"{root}/recurring-occurrences?month={period}", headers=headers).json()
+    assert after[0]["purchase_id"] == first[0]["purchase_id"]
+    assert client.get(f"{root}/invoices?card_id={card}", headers=headers).json() == []
 
 
 def test_income_partial_deferral_and_single_cash_entry(client):

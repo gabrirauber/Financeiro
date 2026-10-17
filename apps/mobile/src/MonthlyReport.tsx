@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Keyboard, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { fetch as expoFetch } from 'expo/fetch';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -25,20 +25,36 @@ async function reportResponse(workspace: Workspace, token: string, period: strin
   } finally { clearTimeout(timeout); }
 }
 
+function monthInput(period: string) {
+  return `${period.slice(5, 7)}/${period.slice(0, 4)}`;
+}
+
+function selectedPeriod(value: string) {
+  const match = /^(\d{2})\/(\d{4})$/.exec(value);
+  if (!match) return null;
+  const month = Number(match[1]);
+  const year = Number(match[2]);
+  return month >= 1 && month <= 12 && year >= 1000 ? `${match[2]}-${match[1]}` : null;
+}
+
 export function MonthlyReport({ workspace, token, period }: {
   workspace: Workspace; token: string; period: string;
 }) {
   const [detail, setDetail] = useState(false);
+  const [reportMonth, setReportMonth] = useState(() => monthInput(period));
   const [busy, setBusy] = useState(false);
   const showError = useToastSetter('error');
   const showSuccess = useToastSetter('success');
 
   async function generate() {
     if (busy) return;
+    const month = selectedPeriod(reportMonth);
+    if (!month) { showError('Informe um mês válido no formato MM/AAAA.'); return; }
+    Keyboard.dismiss();
     setBusy(true);
     try {
-      const response = await reportResponse(workspace, token, period, detail);
-      const filename = `financeiro-${period}${detail ? '-detalhado' : ''}.pdf`;
+      const response = await reportResponse(workspace, token, month, detail);
+      const filename = `rautto-${month}${detail ? '-detalhado' : ''}.pdf`;
       if (Platform.OS === 'web') {
         const url = URL.createObjectURL(await response.blob());
         const anchor = document.createElement('a');
@@ -61,11 +77,35 @@ export function MonthlyReport({ workspace, token, period }: {
     } finally { setBusy(false); }
   }
 
+  function moveMonth(change: number) {
+    Keyboard.dismiss();
+    const month = selectedPeriod(reportMonth) || period;
+    const [year, number] = month.split('-').map(Number);
+    const next = new Date(year, number - 1 + change, 1);
+    setReportMonth(`${String(next.getMonth() + 1).padStart(2, '0')}/${next.getFullYear()}`);
+  }
+
   return <Card>
     <Text style={{ fontSize: 19, fontWeight: '700', color: palette.ink }}>Relatório do mês</Text>
     <Text style={{ color: palette.muted }}>
       Resumo financeiro em PDF, com categorias, faturas, saldos e previsão.
     </Text>
+    <Text style={{ color: palette.ink, fontWeight: '600' }}>Mês do relatório (MM/AAAA)</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Mês anterior do relatório" disabled={busy}
+        onPress={() => moveMonth(-1)} style={{ padding: 12, borderRadius: 12, backgroundColor: palette.soft }}>
+        <Text style={{ color: palette.green, fontWeight: '700', fontSize: 20 }}>‹</Text>
+      </Pressable>
+      <TextInput accessibilityLabel="Mês do relatório" value={reportMonth}
+        onChangeText={value => { const digits = value.replace(/\D/g, '').slice(0, 6); setReportMonth(digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits); }}
+        keyboardType="number-pad" maxLength={7} editable={!busy} placeholder="MM/AAAA"
+        style={{ flex: 1, minHeight: 48, borderWidth: 1, borderColor: palette.line, borderRadius: 12,
+          paddingHorizontal: 14, textAlign: 'center', color: palette.ink, backgroundColor: palette.white }} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Próximo mês do relatório" disabled={busy}
+        onPress={() => moveMonth(1)} style={{ padding: 12, borderRadius: 12, backgroundColor: palette.soft }}>
+        <Text style={{ color: palette.green, fontWeight: '700', fontSize: 20 }}>›</Text>
+      </Pressable>
+    </View>
     <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: detail }}
       onPress={() => setDetail(value => !value)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 }}>
       <View style={{ width: 22, height: 22, borderWidth: 1.5, borderColor: palette.green,

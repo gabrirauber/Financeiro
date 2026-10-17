@@ -25,20 +25,20 @@ type Tab = 'Resumo' | 'Contas' | 'Cartões' | 'Planejamento';
 export default function App() {
   const [theme, setTheme] = useState<ThemeMode>('light');
   useEffect(() => { void readThemePreference().then(setTheme).catch(() => {}); }, []);
-  useEffect(() => { if (Platform.OS === 'web') document.title = 'Meu Controle'; }, []);
+  useEffect(() => { if (Platform.OS === 'web') document.title = 'Rautto'; }, []);
   applyTheme(theme);
   function toggleTheme() {
     const next = theme === 'light' ? 'dark' : 'light';
     setTheme(next);
     void saveThemePreference(next).catch(() => {});
   }
-  return <SafeAreaProvider><ToastProvider><View style={{ flex: 1, backgroundColor: palette.bg }}><StatusBar style={theme === 'dark' ? 'light' : 'dark'} /><AccessGate theme={theme} onToggleTheme={toggleTheme}>{(workspace, token, userId, openMembers, logout) =>
-    <Home key={`${workspace.id}:${userId}`} workspace={workspace} token={token} userId={userId} theme={theme} onToggleTheme={toggleTheme} onOpenMembers={openMembers} onLogout={logout} />
+  return <SafeAreaProvider><ToastProvider><View style={{ flex: 1, backgroundColor: palette.bg }}><StatusBar style={theme === 'dark' ? 'light' : 'dark'} /><AccessGate theme={theme} onToggleTheme={toggleTheme}>{(workspace, token, userId, accessAdmin, openMembers, logout) =>
+    <Home key={`${workspace.id}:${userId}`} workspace={workspace} token={token} userId={userId} accessAdmin={accessAdmin} theme={theme} onToggleTheme={toggleTheme} onOpenMembers={openMembers} onLogout={logout} />
   }</AccessGate><ToastViewport /></View></ToastProvider></SafeAreaProvider>;
 }
 
 type GuideAction = 'account' | 'card' | 'expense' | 'card-rule';
-function Home({ workspace, token, userId, theme, onToggleTheme, onOpenMembers, onLogout }: { workspace: Workspace; token: string; userId: string; theme: ThemeMode; onToggleTheme: () => void; onOpenMembers: () => void; onLogout: () => void }) {
+function Home({ workspace, token, userId, accessAdmin, theme, onToggleTheme, onOpenMembers, onLogout }: { workspace: Workspace; token: string; userId: string; accessAdmin: boolean; theme: ThemeMode; onToggleTheme: () => void; onOpenMembers: () => void; onLogout: () => void }) {
   const s = makeStyles();
   const root = `/workspaces/${workspace.id}`;
   const [categories, setCategories] = useState<Category[]>([]);
@@ -238,8 +238,8 @@ function Home({ workspace, token, userId, theme, onToggleTheme, onOpenMembers, o
         <Pressable accessibilityRole="button" accessibilityLabel="Abrir menu" onPress={() => setMenuOpen(true)} style={s.menuButton}>
           <Text style={s.menuIcon}>☰</Text>
         </Pressable>
-        <Image source={require('./assets/meu-controle-icon-concept-v2.png')} accessibilityLabel="Ícone do Meu Controle" style={s.logo} />
-        <View style={{ flex: 1 }}><Text style={s.brand}>Meu Controle</Text><Text style={s.small}>Seu dinheiro, com clareza.</Text></View>
+        <Image source={require('./assets/rautto-logo.png')} accessibilityLabel="Logo Rautto" resizeMode="contain" style={s.logo} />
+        <View style={{ flex: 1 }}><Text style={s.brand}>Rautto</Text><Text style={s.small}>Seu dinheiro, com clareza.</Text></View>
         <Pressable accessibilityRole="switch" aria-checked={theme === 'dark'} accessibilityLabel="Modo escuro" onPress={onToggleTheme} style={s.themeToggle}>
           <Text style={s.themeToggleText}>{theme === 'dark' ? '☀ Claro' : '☾ Escuro'}</Text>
         </Pressable>
@@ -279,7 +279,7 @@ function Home({ workspace, token, userId, theme, onToggleTheme, onOpenMembers, o
             const sub = cat?.subcategories.find(x => x.id === item.subcategory_id);
             const acc = accounts.find(x => x.id === item.account_id);
             return <View key={item.id} style={s.transaction}>
-              <View style={[s.transactionDot, { backgroundColor: cat?.color || palette.green }]} />
+              <View style={[s.transactionDot, { backgroundColor: chartColor(Math.max(0, categories.findIndex(row => row.id === cat?.id)), theme) }]} />
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={s.itemTitle}>{item.note || sub?.name || 'Despesa'}</Text>
                 <Text style={s.small}>{cat?.name || 'Categoria'} · {sub?.name || 'Subcategoria'} · {dateToDisplay(item.occurred_on)}</Text>
@@ -295,7 +295,7 @@ function Home({ workspace, token, userId, theme, onToggleTheme, onOpenMembers, o
           {!detail && financed.length > 0 && <>
             <View style={s.section}><Text style={s.sectionTitle}>Faturas parceladas</Text><Text style={s.small}>{financed.length} {financed.length === 1 ? 'parcela' : 'parcelas'}</Text></View>
             <Card>{financed.map(item => <View key={item.id} style={s.transaction}>
-              <View style={[s.transactionDot, { backgroundColor: '#6C7296' }]} />
+              <View style={[s.transactionDot, { backgroundColor: palette.accent }]} />
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={s.itemTitle}>{item.card_name} · {item.sequence}/{item.total_count}</Text>
                 <Text style={s.small}>Principal {money(item.principal_cents)} · encargos {money(item.fee_cents)}</Text>
@@ -326,9 +326,9 @@ function Home({ workspace, token, userId, theme, onToggleTheme, onOpenMembers, o
       <View style={s.menuOverlay}>
         <Pressable accessibilityRole="button" accessibilityLabel="Fechar menu" style={StyleSheet.absoluteFill} onPress={() => setMenuOpen(false)} />
         <SafeAreaView style={s.menuPanel}>
-          <Text style={s.menuTitle}>Meu Controle</Text>
+          <Text style={s.menuTitle}>Rautto</Text>
           <Text style={s.small}>{workspace.name}</Text>
-          <Button label="Participantes" secondary onPress={() => { setMenuOpen(false); onOpenMembers(); }} />
+          <Button label={accessAdmin ? 'Participantes e acessos' : 'Participantes'} secondary onPress={() => { setMenuOpen(false); onOpenMembers(); }} />
           <Button label="Relatório do mês" secondary onPress={() => { setMenuOpen(false); setReportOpen(true); }} />
           <Button label="Gerenciar categorias" secondary onPress={() => { setMenuOpen(false); setManageCategories(true); }} />
           <View style={{ flex: 1 }} />
@@ -339,8 +339,8 @@ function Home({ workspace, token, userId, theme, onToggleTheme, onOpenMembers, o
     <Modal visible={reportOpen} animationType="slide" onRequestClose={() => setReportOpen(false)}>
       <SafeAreaView style={s.safe}><View style={s.formShell}><ScrollView contentContainerStyle={s.content}>
         <Text style={s.pageTitle}>Relatório do mês</Text>
-        <Text style={s.description}>{monthTitle}</Text>
-        <MonthlyReport workspace={workspace} token={token} period={period} />
+        <Text style={s.description}>Escolha o mês que deseja consultar.</Text>
+        {reportOpen && <MonthlyReport workspace={workspace} token={token} period={period} />}
         <Button label="Fechar" secondary onPress={() => setReportOpen(false)} />
       </ScrollView></View><ToastViewport bottom={24} /></SafeAreaView>
     </Modal>
@@ -402,16 +402,16 @@ const makeStyles = () => StyleSheet.create({
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
   menuButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: palette.soft }, menuIcon: { fontSize: 25, color: palette.ink, lineHeight: 29 },
   menuOverlay: { flex: 1, backgroundColor: '#0008', flexDirection: 'row' }, menuPanel: { width: '82%', maxWidth: 360, height: '100%', backgroundColor: palette.bg, padding: 20, gap: 14 }, menuTitle: { fontSize: 24, fontWeight: '700', color: palette.ink },
-  logo: { width: 48, height: 48, borderRadius: 13 }, themeToggle: { minHeight: 44, paddingHorizontal: 10, borderRadius: 12, backgroundColor: palette.soft, justifyContent: 'center' }, themeToggleText: { color: palette.ink, fontSize: 12, fontWeight: '700' },
+  logo: { width: 62, height: 58, borderRadius: 12, backgroundColor: '#FFFFFF' }, themeToggle: { minHeight: 44, paddingHorizontal: 10, borderRadius: 12, backgroundColor: palette.soft, justifyContent: 'center' }, themeToggleText: { color: palette.ink, fontSize: 12, fontWeight: '700' },
   brand: { fontSize: 23, fontWeight: '800', letterSpacing: -1, color: palette.ink }, small: { fontSize: 12, color: palette.muted, lineHeight: 18 },
   content: { padding: 24, gap: 18, paddingBottom: 105 }, month: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, monthText: { fontWeight: '600', fontSize: 16, color: palette.ink },
   arrow: { width: 44, height: 44, borderWidth: 1, borderColor: palette.line, borderRadius: 14, justifyContent: 'center', alignItems: 'center', backgroundColor: palette.white }, arrowText: { fontSize: 26, color: palette.green },
-  hero: { borderRadius: 24, backgroundColor: '#285B49', padding: 24, gap: 10 }, heroLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.8, color: '#D5E2C4' }, heroValue: { fontSize: 38, fontWeight: '700', color: 'white', letterSpacing: -1 }, heroDivider: { height: 1, backgroundColor: '#4C7766', marginVertical: 4 }, heroCaption: { fontSize: 13, lineHeight: 20, color: '#E6EEE1' }, heroFoot: { color: '#DAE6D0', fontSize: 10, lineHeight: 16 },
+  hero: { borderRadius: 24, backgroundColor: palette.hero, padding: 24, gap: 10, borderTopWidth: 4, borderTopColor: palette.accent }, heroLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.8, color: palette.heroMuted }, heroValue: { fontSize: 38, fontWeight: '700', color: '#FFFFFF', letterSpacing: -1 }, heroDivider: { height: 1, backgroundColor: palette.heroLine, marginVertical: 4 }, heroCaption: { fontSize: 13, lineHeight: 20, color: palette.heroMuted }, heroFoot: { color: palette.heroMuted, fontSize: 10, lineHeight: 16 },
   section: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }, sectionTitle: { color: palette.ink, fontSize: 17, fontWeight: '700' },
   bar: { paddingVertical: 10, gap: 10, minHeight: 58 }, barHeading: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 }, track: { height: 9, borderRadius: 5, backgroundColor: palette.track, overflow: 'hidden' }, itemTitle: { color: palette.ink, fontWeight: '600', fontSize: 14 }, itemValue: { color: palette.ink, fontWeight: '600', fontSize: 13 },
   barPercent: { color: palette.muted, fontWeight: '700', fontSize: 13 },
   transaction: { flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: palette.line, paddingVertical: 10 }, transactionDot: { width: 8, height: 8, borderRadius: 4 },
-  footerNote: { fontSize: 12, color: palette.muted, textAlign: 'center', lineHeight: 19 }, fab: { position: 'absolute', right: 24, bottom: 100, width: 58, height: 58, borderRadius: 19, backgroundColor: palette.green, alignItems: 'center', justifyContent: 'center', elevation: 5, boxShadow: '0 4px 12px #20362f25' }, fabText: { fontSize: 34, lineHeight: 40, color: palette.bg },
+  footerNote: { fontSize: 12, color: palette.muted, textAlign: 'center', lineHeight: 19 }, fab: { position: 'absolute', right: 24, bottom: 100, width: 58, height: 58, borderRadius: 19, backgroundColor: palette.green, alignItems: 'center', justifyContent: 'center', elevation: 5, boxShadow: '0 4px 12px #0C274733' }, fabText: { fontSize: 34, lineHeight: 40, color: palette.bg },
   nav: { flexDirection: 'row', borderTopWidth: 1, borderColor: palette.line, backgroundColor: palette.bg, paddingVertical: 8 }, navItem: { flex: 1, alignItems: 'center', gap: 4, minHeight: 62 }, navIcon: { width: 58, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 14 }, navActive: { backgroundColor: palette.soft }, navSymbol: { fontSize: 23, color: palette.muted }, navLabel: { fontSize: 12, color: palette.muted },
-  pageTitle: { fontSize: 28, color: palette.ink, fontWeight: '700' }, description: { fontSize: 14, lineHeight: 23, color: palette.muted }, bankCard: { padding: 24, gap: 24, backgroundColor: palette.ink, borderRadius: 24 }, bankName: { fontSize: 24, color: 'white', fontWeight: '600' }, bankDates: { flexDirection: 'row', justifyContent: 'space-between' }, bankDate: { color: 'white', fontWeight: '600', marginTop: 5 }, empty: { paddingVertical: 18, gap: 12 },
+  pageTitle: { fontSize: 28, color: palette.ink, fontWeight: '700' }, description: { fontSize: 14, lineHeight: 23, color: palette.muted }, bankCard: { padding: 24, gap: 24, backgroundColor: palette.bank, borderRadius: 24 }, bankName: { fontSize: 24, color: 'white', fontWeight: '600' }, bankDates: { flexDirection: 'row', justifyContent: 'space-between' }, bankDate: { color: 'white', fontWeight: '600', marginTop: 5 }, empty: { paddingVertical: 18, gap: 12 },
 });

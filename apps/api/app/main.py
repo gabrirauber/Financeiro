@@ -26,7 +26,7 @@ from app.finance import (
 )
 from app.finance import routes as finance
 from app.finance.run_recurring import run as run_recurring
-from app.identity import auth, invites, recovery, workspaces
+from app.identity import access_admin, auth, invites, recovery, workspaces
 from app.validation import validation_message
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             engine.dispose()
 
     app = FastAPI(
-        title="Financeiro API",
+        title="Rautto API",
         version="0.10.0",
         lifespan=lifespan,
         docs_url="/docs" if settings.app_env != "production" else None,
@@ -80,6 +80,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.engine = engine
     app.state.settings = settings
     app.include_router(auth.router)
+    app.include_router(access_admin.router)
     app.include_router(workspaces.router)
     app.include_router(invites.router)
     app.include_router(recovery.router)
@@ -119,7 +120,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def ready(response: Response):
         response.headers["Cache-Control"] = "no-store"
         try:
-            healthy = database_ready(engine)
+            healthy = database_ready(engine, require_access_admin=settings.approval_required)
         except SQLAlchemyError:
             # Não vazar host, usuário, senha ou SQL em respostas ou logs.
             logger.warning("Banco indisponível no diagnóstico de prontidão")

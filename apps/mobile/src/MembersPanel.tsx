@@ -5,9 +5,12 @@ import { Button, Card, palette } from './ui';
 import { useToastSetter } from './Toast';
 
 type Invite = { id: string; expires_at: string };
-export function MembersPanel({ workspace, token, onClose, onChanged }: { workspace: Workspace; token: string; onClose: () => void; onChanged: () => Promise<void> }) {
+type AccessUser = { id: string; email: string; status: 'pending' | 'approved' | 'rejected' | 'revoked'; requested_at: string; access_admin: boolean };
+const accessLabel = { pending: 'Aguardando aprovação', approved: 'Acesso ativo', rejected: 'Pedido recusado', revoked: 'Acesso revogado' };
+export function MembersPanel({ workspace, token, accessAdmin, onClose, onChanged }: { workspace: Workspace; token: string; accessAdmin: boolean; onClose: () => void; onChanged: () => Promise<void> }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
+  const [accessUsers, setAccessUsers] = useState<AccessUser[]>([]);
   const [created, setCreated] = useState<{id: string; code: string}>();
   const setError = useToastSetter('error');
   const [busy, setBusy] = useState(false);
@@ -15,8 +18,9 @@ export function MembersPanel({ workspace, token, onClose, onChanged }: { workspa
   async function load() {
     setMembers(await request<Member[]>(`/workspaces/${workspace.id}/members`, token));
     setInvites(workspace.role === 'admin' ? await request<Invite[]>(`/workspaces/${workspace.id}/invites`, token) : []);
+    if (accessAdmin) setAccessUsers(await request<AccessUser[]>('/admin/users', token));
   }
-  useEffect(() => { void load().catch(e => setError(e.message)); }, [workspace.id, workspace.role]);
+  useEffect(() => { void load().catch(e => setError(e.message)); }, [workspace.id, workspace.role, accessAdmin]);
   async function action(callback: () => Promise<void>) {
     setBusy(true); setError('');
     try { await callback(); setConfirm(undefined); }
@@ -26,11 +30,32 @@ export function MembersPanel({ workspace, token, onClose, onChanged }: { workspa
   async function remove(id: string) {
     await request(`/workspaces/${workspace.id}/members/${id}`, token, 'DELETE'); await load();
   }
-  return <Card><Text style={{ fontSize: 20, color: palette.ink }}>Participantes · {workspace.name}</Text>
+  async function decideAccess(id: string, status: 'approved' | 'rejected' | 'revoked') {
+    await request(`/admin/users/${id}/access`, token, 'PATCH', { status });
+    await load();
+  }
+  return <>
+    {accessAdmin && <Card>
+      <Text style={{ fontSize: 20, fontWeight: '700', color: palette.ink }}>Acesso ao Rautto</Text>
+      <Text style={{ color: palette.muted }}>Novos cadastros só podem entrar depois da sua aprovação. Participar de um espaço é uma permissão separada.</Text>
+      {!accessUsers.some(item => item.status === 'pending') && <Text style={{ color: palette.muted }}>Nenhum pedido aguardando aprovação.</Text>}
+      {accessUsers.filter(item => !item.access_admin).map(item => <View key={item.id} style={{ gap: 8, paddingVertical: 12, borderTopWidth: 1, borderColor: palette.line }}>
+        <Text style={{ color: palette.ink, fontWeight: '700' }}>{item.email}</Text>
+        <Text style={{ color: item.status === 'pending' ? palette.accent : palette.muted }}>{accessLabel[item.status]}</Text>
+        {item.status !== 'approved' && !busy && <Button label={`Aprovar ${item.email}`} onPress={() => void action(() => decideAccess(item.id, 'approved'))} />}
+        {item.status === 'pending' && !busy && <Button label={`Recusar ${item.email}`} secondary onPress={() => void action(() => decideAccess(item.id, 'rejected'))} />}
+        {item.status === 'approved' && !busy && (confirm === `revoke-${item.id}` ? <>
+          <Text style={{ color: palette.ink }}>O acesso desta pessoa ao aplicativo será encerrado, inclusive nas sessões abertas.</Text>
+          <Button label="Confirmar revogação" onPress={() => void action(() => decideAccess(item.id, 'revoked'))} />
+          <Button label="Cancelar" secondary onPress={() => setConfirm(undefined)} />
+        </> : <Button label={`Revogar acesso de ${item.email}`} secondary onPress={() => setConfirm(`revoke-${item.id}`)} />)}
+      </View>)}
+    </Card>}
+    <Card><Text style={{ fontSize: 20, color: palette.ink }}>Participantes · {workspace.name}</Text>
     {workspace.role === 'admin' && <>
       <Text style={{ color: palette.ink }}>Convite de uso único, válido por 24 horas.</Text>
       {!!created && <View style={{gap:8}}><Text selectable accessibilityLabel="Código gerado" style={{fontSize:22,fontWeight:'700'}}>{created.code}</Text>
-        <Button label="Compartilhar código" secondary onPress={() => void action(async () => { await Share.share({message: `Ao criar seu cadastro no Meu Controle, informe o código ${created.code} para entrar no nosso espaço. Válido por 24 horas, para uma pessoa.`}); })} />
+        <Button label="Compartilhar código" secondary onPress={() => void action(async () => { await Share.share({message: `Ao criar seu cadastro no Rautto, informe o código ${created.code} para entrar no nosso espaço. Válido por 24 horas, para uma pessoa.`}); })} />
       </View>}
       {!busy && <Button label="Gerar código de convite" onPress={() => void action(async () => {
         const result = await request<{id:string;code:string}>(`/workspaces/${workspace.id}/invites`, token, 'POST'); setCreated(result); await load();
@@ -67,5 +92,6 @@ export function MembersPanel({ workspace, token, onClose, onChanged }: { workspa
       <Button label="Cancelar saída" secondary onPress={() => setConfirm(undefined)} />
     </> : <Button label="Sair deste espaço" secondary onPress={() => setConfirm('leave')} />)}
     <Button label="Fechar participantes" secondary onPress={onClose} />
-  </Card>;
+    </Card>
+  </>;
 }

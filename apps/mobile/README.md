@@ -1,4 +1,4 @@
-# Meu Controle — aplicativo Android
+# Rautto — aplicativo Android
 
 Na E11, a API está no Railway e o APK de teste é gerado pelo [roteiro de build](../../scripts/build-android-apk.ps1). Veja [instalação e revisão E11](../../docs/revisao-e11.md). A seção abaixo preserva instruções de desenvolvimento das etapas anteriores.
 
