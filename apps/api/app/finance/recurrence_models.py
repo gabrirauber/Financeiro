@@ -87,7 +87,9 @@ class IncomePlan(Base):
     description: Mapped[str] = mapped_column(String(120))
     amount_cents: Mapped[int] = mapped_column(Integer)
     day_of_month: Mapped[int] = mapped_column(Integer)
-    responsible_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    responsible_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     start_month: Mapped[date] = mapped_column(Date)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -108,7 +110,9 @@ class IncomeOccurrence(Base):
     due_on: Mapped[date] = mapped_column(Date)
     expected_cents: Mapped[int] = mapped_column(Integer)
     description: Mapped[str] = mapped_column(String(120))
-    responsible_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    responsible_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
     reminded_on: Mapped[date | None] = mapped_column(Date, nullable=True)
 

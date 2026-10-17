@@ -13,6 +13,7 @@ export function MembersPanel({ workspace, token, accessAdmin, onClose, onChanged
   const [accessUsers, setAccessUsers] = useState<AccessUser[]>([]);
   const [created, setCreated] = useState<{id: string; code: string}>();
   const setError = useToastSetter('error');
+  const setSuccess = useToastSetter('success');
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<string>();
   async function load() {
@@ -34,6 +35,11 @@ export function MembersPanel({ workspace, token, accessAdmin, onClose, onChanged
     await request(`/admin/users/${id}/access`, token, 'PATCH', { status });
     await load();
   }
+  async function deleteAccess(id: string) {
+    await request(`/admin/users/${id}`, token, 'DELETE');
+    await load();
+    setSuccess('Cadastro excluído.');
+  }
   return <>
     {accessAdmin && <Card>
       <Text style={{ fontSize: 20, fontWeight: '700', color: palette.ink }}>Acesso ao Rautto</Text>
@@ -50,6 +56,11 @@ export function MembersPanel({ workspace, token, accessAdmin, onClose, onChanged
           <Button label="Confirmar revogação" onPress={() => void action(() => decideAccess(item.id, 'revoked'))} />
           <Button label="Cancelar" secondary onPress={() => setConfirm(undefined)} />
         </> : <Button label={`Revogar acesso de ${item.email}`} secondary onPress={() => setConfirm(`revoke-${item.id}`)} />)}
+        {item.status === 'revoked' && !item.demo && !busy && (confirm === `delete-${item.id}` ? <>
+          <Text style={{ color: palette.ink }}>Excluir definitivamente o cadastro de {item.email}? Se a pessoa for a única participante do próprio espaço, esse espaço e seus dados financeiros também serão apagados. Os dados de espaços compartilhados serão preservados.</Text>
+          <Button label="Confirmar exclusão" onPress={() => void action(() => deleteAccess(item.id))} />
+          <Button label="Cancelar" secondary onPress={() => setConfirm(undefined)} />
+        </> : <Button label={`Excluir cadastro de ${item.email}`} secondary onPress={() => setConfirm(`delete-${item.id}`)} />)}
       </View>)}
     </Card>}
     <Card><Text style={{ fontSize: 20, color: palette.ink }}>Participantes · {workspace.name}</Text>

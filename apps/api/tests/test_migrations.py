@@ -24,9 +24,16 @@ def test_postgres_migration_roundtrip(monkeypatch):
     engine = build_engine(Settings())
     try:
         # Nunca destruir um banco contendo tabelas desconhecidas.
-        assert set(inspect(engine).get_table_names()) <= set(Base.metadata.tables) | {
-            "alembic_version"
-        }
+        tables = set(inspect(engine).get_table_names())
+        assert tables <= set(Base.metadata.tables) | {"alembic_version"}
+        # Os testes anteriores podem ter excluído um usuário e deixado
+        # referências históricas nulas. Limpar somente este banco descartável
+        # permite testar a reversão do esquema sem adulterar esse histórico.
+        data_tables = tables - {"alembic_version", "app_metadata"}
+        if data_tables:
+            names = ", ".join(f'"{name}"' for name in sorted(data_tables))
+            with engine.begin() as connection:
+                connection.execute(text(f"TRUNCATE {names} CASCADE"))
         command.downgrade(config, "base")
         command.upgrade(config, "e08_income")
         with engine.begin() as connection:

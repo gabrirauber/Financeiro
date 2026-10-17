@@ -10,8 +10,8 @@ import { useToastSetter } from './Toast';
 
 type Rule = { id: string; kind: 'expense' | 'card'; description: string; amount_cents: number; day_of_month: number; category_id: string; subcategory_id: string; payment_method: 'pix' | 'debit' | 'cash' | null; card_id: string | null; active: boolean };
 type Occurrence = { id: string; rule_id: string; kind: 'expense' | 'card'; description: string; due_on: string; amount_cents: number; expense_id: string | null; purchase_id: string | null; paid_cents: number | null; payment_method: 'pix' | 'debit' | 'cash' | null };
-type Plan = { id: string; description: string; amount_cents: number; day_of_month: number; responsible_user_id: string; active: boolean };
-type Expected = { id: string; description: string; due_on: string; expected_cents: number; received_cents: number; remaining_cents: number; completed: boolean; responsible_user_id: string };
+type Plan = { id: string; description: string; amount_cents: number; day_of_month: number; responsible_user_id: string | null; active: boolean };
+type Expected = { id: string; description: string; due_on: string; expected_cents: number; received_cents: number; remaining_cents: number; completed: boolean; responsible_user_id: string | null };
 const input = () => ({ backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink });
 const display = (cents: number) => (cents / 100).toFixed(2).replace('.', ',');
 const dateToIso = (value: string) => value.split('/').reverse().join('-');
@@ -263,7 +263,7 @@ export function PlanningPanel({workspace, token, period, refresh, onChanged, sta
     <Text style={{fontSize:20,fontWeight:'700',color:palette.ink}}>Rendas previstas</Text>
     {plans.filter(p => p.active).map(plan => <Card key={plan.id}>
       <Text style={{fontWeight:'700',color:palette.ink}}>{plan.description} · {money(plan.amount_cents)}</Text>
-      <Text style={{ color: palette.ink }}>Todo dia {plan.day_of_month} · {members.find(m => m.id === plan.responsible_user_id)?.email || 'Responsável'}</Text>
+      <Text style={{ color: palette.ink }}>Todo dia {plan.day_of_month} · {members.find(m => m.id === plan.responsible_user_id)?.email || 'Responsável removido'}</Text>
       <Button label="Editar atual e futuras" secondary onPress={() => start('income', plan)} />
       <Button label="Desativar próximas previsões" secondary onPress={() => void action(async () => { await request(`${root}/income-plans/${plan.id}`, token, 'DELETE'); setNotice('Previsão desativada. O histórico foi preservado.'); })} />
     </Card>)}
