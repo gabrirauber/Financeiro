@@ -13,7 +13,8 @@ const input = () => ({ backgroundColor: palette.white, borderWidth: 1, borderCol
 export function AccessGate({ children, theme, onToggleTheme }: { children: (workspace: Workspace, token: string, userId: string, accessAdmin: boolean, demo: boolean, openMembers: () => void, logout: () => void) => React.ReactNode; theme: ThemeMode; onToggleTheme: () => void }) {
   const [token, setToken] = useState<string>();
   const tokenRef = useRef<string | undefined>(undefined);
-  function activate(value: string) { tokenRef.current = value; setToken(value); }
+  const wasBackgrounded = useRef(false);
+  function activate(value: string) { wasBackgrounded.current = false; tokenRef.current = value; setToken(value); }
   const [user, setUser] = useState<User>();
   const [selected, setSelected] = useState<Workspace>();
   const [register, setRegister] = useState(false);
@@ -71,7 +72,15 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
       setError(e instanceof Error ? e.message : 'Conexão indisponível.');
     }); };
     const timer = setInterval(refresh, 30000);
-    const subscription = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'background') { wasBackgrounded.current = true; return; }
+      if (state !== 'active') return;
+      if (user.demo && wasBackgrounded.current) {
+        wasBackgrounded.current = false;
+        void request('/auth/logout', token, 'POST').catch(() => {});
+        void resetSession();
+      } else refresh();
+    });
     return () => { clearInterval(timer); subscription.remove(); };
   }, [token, user?.id]);
 
