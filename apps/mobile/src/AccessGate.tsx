@@ -10,7 +10,7 @@ import { useToastSetter } from './Toast';
 import { saveOnboardingStep } from './onboardingProgress';
 
 const input = () => ({ backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink });
-export function AccessGate({ children, theme, onToggleTheme }: { children: (workspace: Workspace, token: string, userId: string, accessAdmin: boolean, openMembers: () => void, logout: () => void) => React.ReactNode; theme: ThemeMode; onToggleTheme: () => void }) {
+export function AccessGate({ children, theme, onToggleTheme }: { children: (workspace: Workspace, token: string, userId: string, accessAdmin: boolean, demo: boolean, openMembers: () => void, logout: () => void) => React.ReactNode; theme: ThemeMode; onToggleTheme: () => void }) {
   const [token, setToken] = useState<string>();
   const tokenRef = useRef<string | undefined>(undefined);
   function activate(value: string) { tokenRef.current = value; setToken(value); }
@@ -33,6 +33,7 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
       request<User>('/auth/me', value), request<Workspace[]>('/workspaces', value),
     ]);
     if (tokenRef.current !== value) return;
+    if (profile.demo) await clearSession();
     if (newRegistration) await saveOnboardingStep(profile.id, 0);
     setUser(profile);
     setSelected(workspaces[0]);
@@ -92,7 +93,7 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
 
   async function authenticate() {
     await run(async () => {
-      const result = await request<{ token?: string; status?: 'pending' }>(register ? '/auth/register' : '/auth/login', undefined, 'POST', {
+      const result = await request<{ token?: string; status?: 'pending'; demo?: boolean }>(register ? '/auth/register' : '/auth/login', undefined, 'POST', {
         email: email.trim(), password,
         ...(register ? (code.trim() ? {invite_code: code.trim()} : {workspace_name: 'Minhas finanças'}) : {}),
       });
@@ -102,7 +103,8 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
       }
       if (!result.token) throw new Error('Não foi possível iniciar a sessão. Tente novamente.');
       setPendingMessage(false);
-      await saveSession(result.token); activate(result.token); setPassword('');
+      if (!result.demo) await saveSession(result.token);
+      activate(result.token); setPassword('');
       setCode('');
       await load(result.token, register);
     });
@@ -115,7 +117,7 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
   }
 
   if (selected && user && token) return <View style={{ flex: 1, backgroundColor: palette.bg }}>
-    {children(selected, token, user.id, user.access_admin, () => setManaging(true), () => { void logout(); })}
+    {children(selected, token, user.id, user.access_admin, user.demo, () => setManaging(true), () => { void logout(); })}
     <Modal visible={managing} animationType="slide" onRequestClose={() => setManaging(false)}>
       <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:20, maxWidth:560, width:'100%', alignSelf:'center', gap:16}}>
@@ -141,7 +143,7 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
       {!user ? <Card>
         <Text style={{ fontSize: 22, color: palette.ink }}>{register ? 'Crie seu acesso' : 'Boas-vindas'}</Text>
         <TextInput accessibilityLabel="E-mail" placeholder="E-mail" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} style={input()} editable={!busy} />
-        <TextInput accessibilityLabel="Senha" placeholder="Senha (mínimo 10 caracteres)" secureTextEntry value={password} onChangeText={setPassword} style={input()} editable={!busy} maxLength={128} />
+        <TextInput accessibilityLabel="Senha" placeholder={register ? 'Senha (mínimo 10 caracteres)' : 'Senha'} secureTextEntry value={password} onChangeText={setPassword} style={input()} editable={!busy} maxLength={128} />
         {register && <>
           <Text style={{color: palette.muted}}>Recebeu um convite? Informe o código para entrar no espaço compartilhado. Sem código, criaremos seu espaço automaticamente.</Text>
           <TextInput accessibilityLabel="Código de convite (opcional)" placeholder="Código de convite (opcional)" autoCapitalize="characters" value={code} onChangeText={setCode} style={input()} editable={!busy} maxLength={64} />

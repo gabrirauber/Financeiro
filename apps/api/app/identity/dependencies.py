@@ -20,7 +20,8 @@ Db = Annotated[Session, Depends(get_db)]
 
 
 def current_user(
-    db: Db, credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]
+    request: Request, db: Db,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]
 ):
     if credentials is None:
         raise HTTPException(401, "Entre para continuar.")
@@ -32,6 +33,8 @@ def current_user(
         raise HTTPException(401, "Entre novamente.")
     if user.access_status != "approved":
         raise HTTPException(401, "Seu acesso não está ativo. Entre novamente após a aprovação.")
+    if user.is_demo and request.method not in {"GET", "HEAD", "OPTIONS"}:
+        raise HTTPException(403, "A conta de demonstração permite somente consultas.")
     return user
 
 

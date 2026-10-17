@@ -103,6 +103,8 @@ def transfer_admin(workspace_id: UUID, user_id: UUID, db: Db, user: CurrentUser)
     target = db.get(Membership, (workspace_id, user_id))
     if target is None or user_id == user.id:
         raise HTTPException(400, "Selecione outro participante do espaço.")
+    if db.get(User, user_id).is_demo:
+        raise HTTPException(409, "A conta de demonstração não pode administrar o espaço.")
     actor.role = "member"
     target.role = "admin"
     db.commit()

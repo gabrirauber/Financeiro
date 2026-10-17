@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Keyboard, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { fetch as expoFetch } from 'expo/fetch';
 import { File, Paths } from 'expo-file-system';
+import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Workspace } from './api';
 import { useToastSetter } from './Toast';
@@ -42,39 +43,52 @@ export function MonthlyReport({ workspace, token, period }: {
 }) {
   const [detail, setDetail] = useState(false);
   const [reportMonth, setReportMonth] = useState(() => monthInput(period));
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'print' | 'share' | null>(null);
   const showError = useToastSetter('error');
   const showSuccess = useToastSetter('success');
 
-  async function generate() {
+  async function generate(action: 'print' | 'share') {
     if (busy) return;
     const month = selectedPeriod(reportMonth);
     if (!month) { showError('Informe um mês válido no formato MM/AAAA.'); return; }
     Keyboard.dismiss();
-    setBusy(true);
+    const printWindow = Platform.OS === 'web' && action === 'print'
+      ? window.open('', '_blank') : null;
+    setBusy(action);
     try {
       const response = await reportResponse(workspace, token, month, detail);
       const filename = `rautto-${month}${detail ? '-detalhado' : ''}.pdf`;
       if (Platform.OS === 'web') {
         const url = URL.createObjectURL(await response.blob());
-        const anchor = document.createElement('a');
-        anchor.href = url; anchor.download = filename;
-        document.body.appendChild(anchor); anchor.click(); anchor.remove();
+        if (action === 'print') {
+          if (!printWindow) throw new Error('Permita abrir a janela do PDF para imprimir.');
+          printWindow.location.href = url;
+          showSuccess('PDF aberto. Use Imprimir no visualizador.');
+        } else {
+          const anchor = document.createElement('a');
+          anchor.href = url; anchor.download = filename;
+          document.body.appendChild(anchor); anchor.click(); anchor.remove();
+          showSuccess('PDF gerado. Confira seus downloads.');
+        }
         setTimeout(() => URL.revokeObjectURL(url), 60000);
-        showSuccess('PDF gerado. Confira seus downloads.');
       } else {
         const file = new File(Paths.cache, filename);
         file.write(await response.bytes());
-        if (!await Sharing.isAvailableAsync()) {
-          throw new Error('O compartilhamento não está disponível neste aparelho.');
+        if (action === 'print') {
+          await Print.printAsync({ uri: file.uri });
+        } else {
+          if (!await Sharing.isAvailableAsync()) {
+            throw new Error('O compartilhamento não está disponível neste aparelho.');
+          }
+          await Sharing.shareAsync(file.uri, {
+            mimeType: 'application/pdf', dialogTitle: 'Compartilhar relatório financeiro',
+          });
         }
-        await Sharing.shareAsync(file.uri, {
-          mimeType: 'application/pdf', dialogTitle: 'Compartilhar relatório financeiro',
-        });
       }
     } catch (error) {
+      if (printWindow && !printWindow.closed) printWindow.close();
       showError(error instanceof Error ? error.message : 'Não foi possível gerar o relatório.');
-    } finally { setBusy(false); }
+    } finally { setBusy(null); }
   }
 
   function moveMonth(change: number) {
@@ -92,7 +106,7 @@ export function MonthlyReport({ workspace, token, period }: {
     </Text>
     <Text style={{ color: palette.ink, fontWeight: '600' }}>Mês do relatório (MM/AAAA)</Text>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Mês anterior do relatório" disabled={busy}
+      <Pressable accessibilityRole="button" accessibilityLabel="Mês anterior do relatório" disabled={!!busy}
         onPress={() => moveMonth(-1)} style={{ padding: 12, borderRadius: 12, backgroundColor: palette.soft }}>
         <Text style={{ color: palette.green, fontWeight: '700', fontSize: 20 }}>‹</Text>
       </Pressable>
@@ -101,7 +115,7 @@ export function MonthlyReport({ workspace, token, period }: {
         keyboardType="number-pad" maxLength={7} editable={!busy} placeholder="MM/AAAA"
         style={{ flex: 1, minHeight: 48, borderWidth: 1, borderColor: palette.line, borderRadius: 12,
           paddingHorizontal: 14, textAlign: 'center', color: palette.ink, backgroundColor: palette.white }} />
-      <Pressable accessibilityRole="button" accessibilityLabel="Próximo mês do relatório" disabled={busy}
+      <Pressable accessibilityRole="button" accessibilityLabel="Próximo mês do relatório" disabled={!!busy}
         onPress={() => moveMonth(1)} style={{ padding: 12, borderRadius: 12, backgroundColor: palette.soft }}>
         <Text style={{ color: palette.green, fontWeight: '700', fontSize: 20 }}>›</Text>
       </Pressable>
@@ -114,7 +128,9 @@ export function MonthlyReport({ workspace, token, period }: {
       </View>
       <Text style={{ color: palette.ink, flex: 1 }}>Incluir lançamentos detalhados</Text>
     </Pressable>
-    <Button label={busy ? 'Gerando PDF…' : Platform.OS === 'web' ? 'Baixar PDF' : 'Gerar e compartilhar PDF'}
-      onPress={() => { void generate(); }} disabled={busy} />
+    <Button label={busy === 'print' ? 'Preparando impressão…' : 'Imprimir'}
+      onPress={() => { void generate('print'); }} disabled={!!busy} />
+    <Button label={busy === 'share' ? 'Gerando PDF…' : Platform.OS === 'web' ? 'Baixar PDF' : 'Compartilhar PDF'}
+      onPress={() => { void generate('share'); }} secondary disabled={!!busy} />
   </Card>;
 }

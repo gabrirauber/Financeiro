@@ -5,7 +5,7 @@ import { Button, Card, palette } from './ui';
 import { useToastSetter } from './Toast';
 
 type Invite = { id: string; expires_at: string };
-type AccessUser = { id: string; email: string; status: 'pending' | 'approved' | 'rejected' | 'revoked'; requested_at: string; access_admin: boolean };
+type AccessUser = { id: string; email: string; status: 'pending' | 'approved' | 'rejected' | 'revoked'; requested_at: string; access_admin: boolean; demo: boolean };
 const accessLabel = { pending: 'Aguardando aprovação', approved: 'Acesso ativo', rejected: 'Pedido recusado', revoked: 'Acesso revogado' };
 export function MembersPanel({ workspace, token, accessAdmin, onClose, onChanged }: { workspace: Workspace; token: string; accessAdmin: boolean; onClose: () => void; onChanged: () => Promise<void> }) {
   const [members, setMembers] = useState<Member[]>([]);
@@ -41,6 +41,7 @@ export function MembersPanel({ workspace, token, accessAdmin, onClose, onChanged
       {!accessUsers.some(item => item.status === 'pending') && <Text style={{ color: palette.muted }}>Nenhum pedido aguardando aprovação.</Text>}
       {accessUsers.filter(item => !item.access_admin).map(item => <View key={item.id} style={{ gap: 8, paddingVertical: 12, borderTopWidth: 1, borderColor: palette.line }}>
         <Text style={{ color: palette.ink, fontWeight: '700' }}>{item.email}</Text>
+        {item.demo && <Text style={{ color: palette.muted }}>Demonstração · consulta o seu espaço real sem poder salvar alterações</Text>}
         <Text style={{ color: item.status === 'pending' ? palette.accent : palette.muted }}>{accessLabel[item.status]}</Text>
         {item.status !== 'approved' && !busy && <Button label={`Aprovar ${item.email}`} onPress={() => void action(() => decideAccess(item.id, 'approved'))} />}
         {item.status === 'pending' && !busy && <Button label={`Recusar ${item.email}`} secondary onPress={() => void action(() => decideAccess(item.id, 'rejected'))} />}

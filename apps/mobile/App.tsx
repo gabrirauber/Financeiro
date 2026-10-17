@@ -32,13 +32,13 @@ export default function App() {
     setTheme(next);
     void saveThemePreference(next).catch(() => {});
   }
-  return <SafeAreaProvider><ToastProvider><View style={{ flex: 1, backgroundColor: palette.bg }}><StatusBar style={theme === 'dark' ? 'light' : 'dark'} /><AccessGate theme={theme} onToggleTheme={toggleTheme}>{(workspace, token, userId, accessAdmin, openMembers, logout) =>
-    <Home key={`${workspace.id}:${userId}`} workspace={workspace} token={token} userId={userId} accessAdmin={accessAdmin} theme={theme} onToggleTheme={toggleTheme} onOpenMembers={openMembers} onLogout={logout} />
+  return <SafeAreaProvider><ToastProvider><View style={{ flex: 1, backgroundColor: palette.bg }}><StatusBar style={theme === 'dark' ? 'light' : 'dark'} /><AccessGate theme={theme} onToggleTheme={toggleTheme}>{(workspace, token, userId, accessAdmin, demo, openMembers, logout) =>
+    <Home key={`${workspace.id}:${userId}`} workspace={workspace} token={token} userId={userId} accessAdmin={accessAdmin} demo={demo} theme={theme} onToggleTheme={toggleTheme} onOpenMembers={openMembers} onLogout={logout} />
   }</AccessGate><ToastViewport /></View></ToastProvider></SafeAreaProvider>;
 }
 
 type GuideAction = 'account' | 'card' | 'expense' | 'card-rule';
-function Home({ workspace, token, userId, accessAdmin, theme, onToggleTheme, onOpenMembers, onLogout }: { workspace: Workspace; token: string; userId: string; accessAdmin: boolean; theme: ThemeMode; onToggleTheme: () => void; onOpenMembers: () => void; onLogout: () => void }) {
+function Home({ workspace, token, userId, accessAdmin, demo, theme, onToggleTheme, onOpenMembers, onLogout }: { workspace: Workspace; token: string; userId: string; accessAdmin: boolean; demo: boolean; theme: ThemeMode; onToggleTheme: () => void; onOpenMembers: () => void; onLogout: () => void }) {
   const s = makeStyles();
   const root = `/workspaces/${workspace.id}`;
   const [categories, setCategories] = useState<Category[]>([]);
@@ -245,6 +245,7 @@ function Home({ workspace, token, userId, accessAdmin, theme, onToggleTheme, onO
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={s.content}>
+        {demo && <Card><Text style={{ color: palette.ink, fontWeight: '700' }}>Modo demonstração</Text><Text style={{ color: palette.muted }}>Você pode explorar o aplicativo e preencher formulários. Alterações não podem ser salvas.</Text></Card>}
         {!guideReady ? <Text style={s.small}>Preparando seu espaço…</Text> : <>
         {guideActive && guideStep !== null && (tab === 'Resumo' ?
           <FirstRunGuide step={guideStep} exists={guideExists} hasCard={cards.length > 0}

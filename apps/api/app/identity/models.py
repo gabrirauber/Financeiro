@@ -32,6 +32,7 @@ class User(Base):
         String(10), default="pending", server_default="pending"
     )
     is_access_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     requested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

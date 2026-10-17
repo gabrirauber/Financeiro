@@ -22,11 +22,11 @@ def now():
     return datetime.now(UTC)
 
 
-def create_session(db, user_id):
+def create_session(db, user_id, *, demo=False):
     token = secrets.token_urlsafe(32)
-    expires = now() + timedelta(days=30)
+    expires = now() + (timedelta(hours=1) if demo else timedelta(days=30))
     db.add(LoginSession(token_hash=digest(token), user_id=user_id, expires_at=expires))
-    return {"token": token, "expires_at": expires}
+    return {"token": token, "expires_at": expires, "demo": demo}
 
 
 def throttle(db, scope: str, identity: str, limit: int):

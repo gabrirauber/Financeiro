@@ -29,6 +29,7 @@ def serialize_user(user: User):
         "status": user.access_status,
         "requested_at": user.requested_at,
         "access_admin": user.is_access_admin,
+        "demo": user.is_demo,
     }
 
 

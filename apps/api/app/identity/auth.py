@@ -24,11 +24,20 @@ class PasswordInput(BaseModel):
         return value
 
 
-class Credentials(PasswordInput):
+class Credentials(BaseModel):
     email: EmailStr
+    password: SecretStr
+
+    @field_validator("password")
+    @classmethod
+    def login_password_length(cls, value):
+        if not 8 <= len(value.get_secret_value()) <= 128:
+            raise ValueError("A senha deve ter de 8 a 128 caracteres.")
+        return value
 
 
-class Registration(Credentials):
+class Registration(PasswordInput):
+    email: EmailStr
     invite_code: str | None = Field(default=None, max_length=64)
     workspace_name: str | None = Field(default=None, max_length=80)
 
@@ -116,7 +125,7 @@ def login(data: Credentials, request: Request, response: Response, db: Db):
         raise HTTPException(403, "Seu pedido de acesso não foi aprovado.")
     if user.access_status == "revoked":
         raise HTTPException(403, "Seu acesso ao Rautto foi revogado.")
-    result = create_session(db, user.id)
+    result = create_session(db, user.id, demo=user.is_demo)
     db.commit()
     response.headers["Cache-Control"] = "no-store"
     return result
@@ -125,7 +134,7 @@ def login(data: Credentials, request: Request, response: Response, db: Db):
 @router.get("/me")
 def me(user: CurrentUser):
     return {"id": user.id, "email": user.email,
-            "access_admin": user.is_access_admin}
+            "access_admin": user.is_access_admin, "demo": user.is_demo}
 
 
 @router.post("/logout", status_code=204)
