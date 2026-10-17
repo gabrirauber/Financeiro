@@ -7,10 +7,10 @@ import { MembersPanel } from './MembersPanel';
 import { Recovery } from './Recovery';
 import { Button, Card, palette, ThemeMode } from './ui';
 import { useToastSetter } from './Toast';
-import { saveOnboardingStep } from './onboardingProgress';
+import { readPreviousOnboardingStep } from './onboardingProgress';
 
 const input = () => ({ backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line, borderRadius: 12, padding: 14, fontSize: 16, color: palette.ink });
-export function AccessGate({ children, theme, onToggleTheme }: { children: (workspace: Workspace, token: string, userId: string, accessAdmin: boolean, demo: boolean, openMembers: () => void, logout: () => void) => React.ReactNode; theme: ThemeMode; onToggleTheme: () => void }) {
+export function AccessGate({ children, theme, onToggleTheme }: { children: (workspace: Workspace, token: string, userId: string, accessAdmin: boolean, demo: boolean, onboardingStep: number, openMembers: () => void, logout: () => void) => React.ReactNode; theme: ThemeMode; onToggleTheme: () => void }) {
   const [token, setToken] = useState<string>();
   const tokenRef = useRef<string | undefined>(undefined);
   const wasBackgrounded = useRef(false);
@@ -29,13 +29,20 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
   const [busy, setBusy] = useState(true);
   const setError = useToastSetter('error');
 
-  async function load(value: string, newRegistration = false) {
+  async function load(value: string) {
     const [profile, workspaces] = await Promise.all([
       request<User>('/auth/me', value), request<Workspace[]>('/workspaces', value),
     ]);
     if (tokenRef.current !== value) return;
     if (profile.demo) await clearSession();
-    if (newRegistration) await saveOnboardingStep(profile.id, 0);
+    if (!profile.demo && profile.onboarding_step < 4) {
+      const previous = await readPreviousOnboardingStep(profile.id).catch(() => null);
+      if (previous !== null && previous > profile.onboarding_step) {
+        const saved = await request<{step: number}>('/auth/onboarding', value, 'PATCH', {step: previous})
+          .catch(() => null);
+        if (saved) profile.onboarding_step = saved.step;
+      }
+    }
     setUser(profile);
     setSelected(workspaces[0]);
     if (workspaces.length === 0) setManaging(false);
@@ -115,7 +122,7 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
       if (!result.demo) await saveSession(result.token);
       activate(result.token); setPassword('');
       setCode('');
-      await load(result.token, register);
+      await load(result.token);
     });
   }
   async function logout() {
@@ -126,7 +133,7 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
   }
 
   if (selected && user && token) return <View style={{ flex: 1, backgroundColor: palette.bg }}>
-    {children(selected, token, user.id, user.access_admin, user.demo, () => setManaging(true), () => { void logout(); })}
+    {children(selected, token, user.id, user.access_admin, user.demo, user.onboarding_step, () => setManaging(true), () => { void logout(); })}
     <Modal visible={managing} animationType="slide" onRequestClose={() => setManaging(false)}>
       <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:20, maxWidth:560, width:'100%', alignSelf:'center', gap:16}}>

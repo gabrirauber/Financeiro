@@ -49,10 +49,14 @@ def test_postgres_migration_roundtrip(monkeypatch):
                 "INSERT INTO memberships (workspace_id, user_id, role) "
                 "VALUES (:workspace, :owner, 'admin')"
             ), {"workspace": workspace_id, "owner": owner_id})
+            connection.execute(text(
+                "INSERT INTO users (id, email, password_hash, access_status) "
+                "VALUES (:id, 'aguardando@example.com', 'teste', 'pending')"
+            ), {"id": uuid4()})
         command.upgrade(config, "head")
         with engine.connect() as connection:
             rows = connection.execute(text(
-                "SELECT email, access_status, is_access_admin, is_demo "
+                "SELECT email, access_status, is_access_admin, is_demo, onboarding_step "
                 "FROM users ORDER BY email"
             )).all()
             example = connection.execute(text(
@@ -72,9 +76,10 @@ def test_postgres_migration_roundtrip(monkeypatch):
                 "(SELECT id FROM credit_cards WHERE name = 'Cartão Exemplo'))"
             ))
         assert rows == [
-            ("antigo@example.com", "approved", False, False),
-            ("gabrirauber@gmail.com", "approved", True, False),
-            ("teste@teste.com.br", "pending", False, True),
+            ("aguardando@example.com", "pending", False, False, 0),
+            ("antigo@example.com", "approved", False, False, 0),
+            ("gabrirauber@gmail.com", "approved", True, False, 4),
+            ("teste@teste.com.br", "pending", False, True, 4),
         ]
         assert example == (3, 50000)
         assert spaces == [
@@ -110,6 +115,8 @@ def test_postgres_migration_roundtrip(monkeypatch):
                                   json={"name": "Não permitido"})
             assert blocked.status_code == 403
             assert "somente consultas" in blocked.json()["detail"]
+            assert client.patch("/auth/onboarding", headers=headers,
+                                json={"step": 4}).status_code == 403
             assert client.post("/auth/logout", headers=headers).status_code == 204
         with engine.begin() as connection:
             connection.execute(text(

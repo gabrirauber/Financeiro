@@ -1,4 +1,4 @@
-export type User = { id: string; email: string; access_admin: boolean; demo: boolean };
+export type User = { id: string; email: string; access_admin: boolean; demo: boolean; onboarding_step: number };
 export type Workspace = { id: string; name: string; role: 'admin' | 'member' };
 export type Member = User & { role: 'admin' | 'member' };
 

@@ -50,6 +50,7 @@ def test_registration_login_logout_and_session_expiry(client):
     headers = register(client, "Pessoa@example.com")
     response = client.get("/auth/me", headers=headers)
     assert response.json()["email"] == "pessoa@example.com"
+    assert response.json()["onboarding_step"] == 0
     with Session(client.app.state.engine) as db:
         user = db.scalar(select(User))
         assert user.password_hash.startswith("$argon2")

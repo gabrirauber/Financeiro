@@ -31,7 +31,7 @@ def build_engine(settings: Settings):
 def database_ready(engine, require_access_admin: bool = False) -> bool:
     with engine.connect() as connection:
         version = connection.scalar(select(AppMetadata.value).where(AppMetadata.key == "schema"))
-        if version != "e12":
+        if version != "e13":
             return False
         if require_access_admin:
             from app.identity.models import User

@@ -70,6 +70,15 @@ def test_pending_approval_revocation_and_admin_permissions(client):
         login = protected.post("/auth/login", json=credentials)
         assert login.status_code == 200, login.text
         user_headers = {"Authorization": "Bearer " + login.json()["token"]}
+        assert protected.get("/auth/me", headers=user_headers).json()["onboarding_step"] == 0
+        assert protected.patch("/auth/onboarding", headers=user_headers,
+                               json={"step": 1}).json() == {"step": 1}
+        assert protected.patch("/auth/onboarding", headers=user_headers,
+                               json={"step": 0}).json() == {"step": 1}
+        assert protected.post("/auth/login", json=credentials).status_code == 200
+        assert protected.get("/auth/me", headers=user_headers).json()["onboarding_step"] == 1
+        assert protected.patch("/auth/onboarding", headers=user_headers,
+                               json={"step": 4}).json() == {"step": 4}
         assert protected.get("/admin/users", headers=user_headers).status_code == 403
         assert protected.patch(f"/admin/users/{applicant['id']}/access", headers=user_headers,
                                json={"status": "revoked"}).status_code == 403

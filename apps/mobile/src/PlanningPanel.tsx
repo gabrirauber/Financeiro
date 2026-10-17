@@ -195,6 +195,48 @@ export function PlanningPanel({workspace, token, period, refresh, onChanged, sta
       { ...item, subcategories: [...item.subcategories, created].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')) } : item));
     setSubcategoryId(created.id);
   }
+  function recurringRule(rule: Rule) {
+    const item = occurrencesByRule.get(rule.id);
+    return <Card key={rule.id}>
+      <View style={{flexDirection:'row',alignItems:'flex-start',gap:8}}>
+        <Text style={{fontWeight:'700',color:palette.ink,flex:1}}>{item?.description || rule.description} · {money(item?.paid_cents ?? item?.amount_cents ?? rule.amount_cents)}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Opções de ${rule.description}`} onPress={() => setOpenRuleMenu(openRuleMenu === rule.id ? null : rule.id)} style={{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center'}}>
+          <Text style={{color:palette.green,fontSize:26,lineHeight:30}}>⋯</Text>
+        </Pressable>
+      </View>
+      <Text style={{color:palette.ink}}>{rule.kind === 'card' ? item?.purchase_id ? 'Assinatura lançada no cartão' : 'Assinatura prevista no cartão' : item?.expense_id ? 'Despesa paga' : 'Despesa fixa prevista'} · {item ? `vence em ${item.due_on.split('-').reverse().join('/')}` : `todo dia ${rule.day_of_month}`}</Text>
+      {item?.kind === 'expense' && !item.expense_id && currentMonth && <>
+        <Button label="Registrar pagamento" onPress={() => startPay(item)} />
+        {paymentForm(item)}
+      </>}
+      {openRuleMenu === rule.id && <View style={{gap:8}}>
+        <Button label="Editar atual e futuras" secondary onPress={() => { setOpenRuleMenu(null); start(rule.kind, rule); }} />
+        <Button label="Desativar próximas ocorrências" secondary onPress={() => { setOpenRuleMenu(null); void action(async () => { await request(`${root}/recurring-rules/${rule.id}`, token, 'DELETE'); setNotice('Recorrência desativada. O histórico foi preservado.'); }); }} />
+      </View>}
+    </Card>;
+  }
+  function previousOccurrence(item: Occurrence) {
+    return <Card key={item.id}>
+      <Text style={{fontWeight:'700',color:palette.ink}}>{item.description} · {money(item.paid_cents ?? item.amount_cents)}</Text>
+      <Text style={{color:palette.ink}}>{item.kind === 'card' ? item.purchase_id ? 'Assinatura lançada no cartão' : 'Assinatura prevista no cartão' : item.expense_id ? 'Despesa paga' : 'Despesa fixa prevista'} · vence em {item.due_on.split('-').reverse().join('/')}</Text>
+      {item.kind === 'expense' && !item.expense_id && currentMonth && <>
+        <Button label="Registrar pagamento" onPress={() => startPay(item)} />
+        {paymentForm(item)}
+      </>}
+    </Card>;
+  }
+  function recurringGroup(kind: 'expense' | 'card') {
+    const groupRules = activeRules.filter(rule => rule.kind === kind);
+    const oldItems = occurrences.filter(item => item.kind === kind && !activeRuleIds.has(item.rule_id));
+    const expense = kind === 'expense';
+    return <View style={{gap:12,padding:16,borderWidth:1,borderColor:palette.line,borderRadius:20,backgroundColor:palette.soft}}>
+      <Text style={{fontSize:20,fontWeight:'700',color:palette.ink}}>{expense ? 'Despesas fixas' : 'Assinaturas no cartão'}</Text>
+      <Text style={{color:palette.muted}}>{expense ? 'Compromissos mensais pagos por conta ou dinheiro.' : 'Cobranças mensais que entram na fatura do cartão.'}</Text>
+      {groupRules.map(recurringRule)}
+      {oldItems.map(previousOccurrence)}
+      {!groupRules.length && !oldItems.length && <Text style={{color:palette.muted}}>{expense ? 'Nenhuma despesa fixa neste mês.' : 'Nenhuma assinatura neste mês.'}</Text>}
+    </View>;
+  }
   return <View style={{gap:16}}>
     <Text style={{fontSize:28,fontWeight:'700',color:palette.ink}}>Planejamento</Text>
     <Text style={{color:palette.muted}}>Contas fixas, assinaturas e rendas previstas de {period.slice(5)}/{period.slice(0,4)}.</Text>
@@ -216,35 +258,8 @@ export function PlanningPanel({workspace, token, period, refresh, onChanged, sta
       <Button label={busy ? 'Salvando…' : 'Salvar'} onPress={() => { if (!busy) void save(); }} />
       <Button label="Cancelar" secondary onPress={() => setMode(null)} />
     </Card>}
-    <Text style={{fontSize:20,fontWeight:'700',color:palette.ink}}>Despesas fixas e assinaturas</Text>
-    {activeRules.map(rule => {
-      const item = occurrencesByRule.get(rule.id);
-      return <Card key={rule.id}>
-        <View style={{flexDirection:'row',alignItems:'flex-start',gap:8}}>
-          <Text style={{fontWeight:'700',color:palette.ink,flex:1}}>{item?.description || rule.description} · {money(item?.paid_cents ?? item?.amount_cents ?? rule.amount_cents)}</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Opções de ${rule.description}`} onPress={() => setOpenRuleMenu(openRuleMenu === rule.id ? null : rule.id)} style={{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center'}}>
-            <Text style={{color:palette.green,fontSize:26,lineHeight:30}}>⋯</Text>
-          </Pressable>
-        </View>
-        <Text style={{color:palette.ink}}>{rule.kind === 'card' ? item?.purchase_id ? 'Assinatura lançada no cartão' : 'Assinatura prevista no cartão' : item?.expense_id ? 'Despesa paga' : 'Despesa fixa prevista'} · {item ? `vence em ${item.due_on.split('-').reverse().join('/')}` : `todo dia ${rule.day_of_month}`}</Text>
-        {item?.kind === 'expense' && !item.expense_id && currentMonth && <>
-          <Button label="Registrar pagamento" onPress={() => startPay(item)} />
-          {paymentForm(item)}
-        </>}
-        {openRuleMenu === rule.id && <View style={{gap:8}}>
-          <Button label="Editar atual e futuras" secondary onPress={() => { setOpenRuleMenu(null); start(rule.kind, rule); }} />
-          <Button label="Desativar próximas ocorrências" secondary onPress={() => { setOpenRuleMenu(null); void action(async () => { await request(`${root}/recurring-rules/${rule.id}`, token, 'DELETE'); setNotice('Recorrência desativada. O histórico foi preservado.'); }); }} />
-        </View>}
-      </Card>;
-    })}
-    {occurrences.filter(item => !activeRuleIds.has(item.rule_id)).map(item => <Card key={item.id}>
-      <Text style={{fontWeight:'700',color:palette.ink}}>{item.description} · {money(item.paid_cents ?? item.amount_cents)}</Text>
-      <Text style={{color:palette.ink}}>{item.kind === 'card' ? item.purchase_id ? 'Assinatura lançada no cartão' : 'Assinatura prevista no cartão' : item.expense_id ? 'Despesa paga' : 'Despesa fixa prevista'} · vence em {item.due_on.split('-').reverse().join('/')}</Text>
-      {item.kind === 'expense' && !item.expense_id && currentMonth && <>
-        <Button label="Registrar pagamento" onPress={() => startPay(item)} />
-        {paymentForm(item)}
-      </>}
-    </Card>)}
+    {recurringGroup('expense')}
+    {recurringGroup('card')}
     <Text style={{fontSize:20,fontWeight:'700',color:palette.ink}}>Rendas previstas</Text>
     {plans.filter(p => p.active).map(plan => <Card key={plan.id}>
       <Text style={{fontWeight:'700',color:palette.ink}}>{plan.description} · {money(plan.amount_cents)}</Text>

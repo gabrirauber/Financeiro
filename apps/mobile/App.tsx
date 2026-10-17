@@ -17,7 +17,6 @@ import { request, Workspace } from './src/api';
 import { Account, Category, Expense, ExpenseInput, Subcategory, CreditCard, CardInstallment, CardPurchaseInput, FinancingInstallment, dateToDisplay, monthIso, paymentLabel } from './src/finance';
 import { applyTheme, Button, Card, palette, ThemeMode } from './src/ui';
 import { readThemePreference, saveThemePreference } from './src/themePreference';
-import { readOnboardingStep, saveOnboardingStep } from './src/onboardingProgress';
 import { FirstRunGuide } from './src/FirstRunGuide';
 import { chartColor, PieChart, PieSegment } from './src/PieChart';
 
@@ -32,21 +31,21 @@ export default function App() {
     setTheme(next);
     void saveThemePreference(next).catch(() => {});
   }
-  return <SafeAreaProvider><ToastProvider><View style={{ flex: 1, backgroundColor: palette.bg }}><StatusBar style={theme === 'dark' ? 'light' : 'dark'} /><AccessGate theme={theme} onToggleTheme={toggleTheme}>{(workspace, token, userId, accessAdmin, demo, openMembers, logout) =>
-    <Home key={`${workspace.id}:${userId}`} workspace={workspace} token={token} userId={userId} accessAdmin={accessAdmin} demo={demo} theme={theme} onToggleTheme={toggleTheme} onOpenMembers={openMembers} onLogout={logout} />
+  return <SafeAreaProvider><ToastProvider><View style={{ flex: 1, backgroundColor: palette.bg }}><StatusBar style={theme === 'dark' ? 'light' : 'dark'} /><AccessGate theme={theme} onToggleTheme={toggleTheme}>{(workspace, token, userId, accessAdmin, demo, onboardingStep, openMembers, logout) =>
+    <Home key={`${workspace.id}:${userId}`} workspace={workspace} token={token} accessAdmin={accessAdmin} demo={demo} onboardingStep={onboardingStep} theme={theme} onToggleTheme={toggleTheme} onOpenMembers={openMembers} onLogout={logout} />
   }</AccessGate><ToastViewport /></View></ToastProvider></SafeAreaProvider>;
 }
 
 type GuideAction = 'account' | 'card' | 'expense' | 'card-rule';
-function Home({ workspace, token, userId, accessAdmin, demo, theme, onToggleTheme, onOpenMembers, onLogout }: { workspace: Workspace; token: string; userId: string; accessAdmin: boolean; demo: boolean; theme: ThemeMode; onToggleTheme: () => void; onOpenMembers: () => void; onLogout: () => void }) {
+function Home({ workspace, token, accessAdmin, demo, onboardingStep, theme, onToggleTheme, onOpenMembers, onLogout }: { workspace: Workspace; token: string; accessAdmin: boolean; demo: boolean; onboardingStep: number; theme: ThemeMode; onToggleTheme: () => void; onOpenMembers: () => void; onLogout: () => void }) {
   const s = makeStyles();
   const root = `/workspaces/${workspace.id}`;
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [rules, setRules] = useState<{kind: 'expense' | 'card'; active: boolean}[]>([]);
-  const [guideStep, setGuideStep] = useState<number | null>(null);
-  const [guideReady, setGuideReady] = useState(false);
+  const [guideStep, setGuideStep] = useState(onboardingStep ?? 4);
+  const [guideSaving, setGuideSaving] = useState(false);
   const [guideAction, setGuideAction] = useState<{kind: GuideAction; id: number} | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [financed, setFinanced] = useState<FinancingInstallment[]>([]);
@@ -70,32 +69,24 @@ function Home({ workspace, token, userId, accessAdmin, demo, theme, onToggleThem
   const monthName = month.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   const monthTitle = monthName.charAt(0).toUpperCase() + monthName.slice(1);
   const currentMonth = monthIso(new Date());
-  const guideActive = guideStep !== null && guideStep < 4;
+  const guideActive = guideStep < 4;
   const guideExists = guideStep === 0 ? accounts.length > 0 : guideStep === 1 ? cards.length > 0 :
     guideStep === 2 ? rules.some(rule => rule.active && rule.kind === 'expense') :
     guideStep === 3 ? rules.some(rule => rule.active && rule.kind === 'card') : false;
 
-  useEffect(() => {
-    let active = true;
-    setGuideReady(false);
-    void readOnboardingStep(userId).then(step => { if (active) setGuideStep(step); })
-      .catch(() => { if (active) setGuideStep(null); })
-      .finally(() => { if (active) setGuideReady(true); });
-    return () => { active = false; };
-  }, [userId]);
-
-  function advanceGuide() {
-    if (guideStep === null) return;
-    const next = Math.min(4, guideStep + 1);
-    setGuideStep(next); setGuideAction(null); setTab('Resumo');
-    void saveOnboardingStep(userId, next).catch(() => setError('Não foi possível salvar o progresso do guia.'));
+  async function saveGuideStep(next: number) {
+    if (guideSaving) return;
+    setGuideSaving(true);
+    try {
+      const saved = await request<{step: number}>('/auth/onboarding', token, 'PATCH', { step: next });
+      setGuideStep(saved.step); setGuideAction(null); setTab('Resumo');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Não foi possível salvar o progresso do guia.');
+    } finally { setGuideSaving(false); }
   }
-  function finishGuide() {
-    setGuideStep(4); setGuideAction(null); setTab('Resumo');
-    void saveOnboardingStep(userId, 4).catch(() => setError('Não foi possível salvar o progresso do guia.'));
-  }
+  function advanceGuide() { void saveGuideStep(Math.min(4, guideStep + 1)); }
+  function finishGuide() { void saveGuideStep(4); }
   function openGuideForm() {
-    if (guideStep === null) return;
     const kind: GuideAction = guideStep === 0 ? 'account' : guideStep === 1 || (guideStep === 3 && cards.length === 0) ? 'card' : guideStep === 2 ? 'expense' : 'card-rule';
     setGuideAction(value => ({ kind, id: (value?.id || 0) + 1 }));
     setTab(kind === 'account' ? 'Contas' : kind === 'card' ? 'Cartões' : 'Planejamento');
@@ -246,8 +237,8 @@ function Home({ workspace, token, userId, accessAdmin, demo, theme, onToggleThem
       </View>
       <ScrollView contentContainerStyle={s.content}>
         {demo && <Card><Text style={{ color: palette.ink, fontWeight: '700' }}>Modo demonstração</Text><Text style={{ color: palette.muted }}>Você pode explorar o aplicativo e preencher formulários. Alterações não podem ser salvas.</Text></Card>}
-        {!guideReady ? <Text style={s.small}>Preparando seu espaço…</Text> : <>
-        {guideActive && guideStep !== null && (tab === 'Resumo' ?
+        <>
+        {guideActive && (tab === 'Resumo' ?
           <FirstRunGuide step={guideStep} exists={guideExists} hasCard={cards.length > 0}
             onOpen={openGuideForm} onNext={advanceGuide} onFinish={finishGuide} /> :
           <View style={{ gap: 6 }}><Text style={s.small}>PRIMEIROS PASSOS · ETAPA {guideStep + 1} DE 4</Text>
@@ -318,7 +309,7 @@ function Home({ workspace, token, userId, accessAdmin, demo, theme, onToggleThem
           startCreate={guideAction?.kind === 'expense' ? 'expense' : guideAction?.kind === 'card-rule' ? 'card' : undefined}
           startCreateRequest={guideAction?.id}
           onCreated={kind => createdGuideItem(kind === 'card' ? 'card-rule' : 'expense')} />}
-        </>}
+        </>
       </ScrollView>
       {!guideActive && <Pressable accessibilityRole="button" accessibilityLabel="Adicionar despesa" onPress={() => { void openNewExpense(); }} style={({ pressed }) => [s.fab, pressed && { opacity: 0.8 }]}><Text style={s.fabText}>+</Text></Pressable>}
       <View style={s.nav}>{(['Resumo', 'Contas', 'Cartões', 'Planejamento'] as Tab[]).map((item, index) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => { setTab(item); setDetail(null); if (item === 'Resumo') setRefresh(value => value + 1); }} style={s.navItem}><View style={[s.navIcon, tab === item && s.navActive]}><Text style={[s.navSymbol, tab === item && { color: palette.green }]}>{['▥', '▤', '▱', '◷'][index]}</Text></View><Text style={[s.navLabel, tab === item && { color: palette.green, fontWeight: '700' }]}>{item}</Text></Pressable>)}</View>

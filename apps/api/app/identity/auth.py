@@ -65,6 +65,10 @@ class NameInput(BaseModel):
         return value
 
 
+class OnboardingStepInput(BaseModel):
+    step: int = Field(ge=0, le=4)
+
+
 def normalize(email):
     return str(email).strip().lower()
 
@@ -134,7 +138,16 @@ def login(data: Credentials, request: Request, response: Response, db: Db):
 @router.get("/me")
 def me(user: CurrentUser):
     return {"id": user.id, "email": user.email,
-            "access_admin": user.is_access_admin, "demo": user.is_demo}
+            "access_admin": user.is_access_admin, "demo": user.is_demo,
+            "onboarding_step": user.onboarding_step}
+
+
+@router.patch("/onboarding")
+def update_onboarding(data: OnboardingStepInput, user: CurrentUser, db: Db):
+    current = db.scalar(select(User).where(User.id == user.id).with_for_update())
+    current.onboarding_step = max(current.onboarding_step, data.step)
+    db.commit()
+    return {"step": current.onboarding_step}
 
 
 @router.post("/logout", status_code=204)

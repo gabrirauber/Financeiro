@@ -33,6 +33,7 @@ class User(Base):
     )
     is_access_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    onboarding_step: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     requested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
