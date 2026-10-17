@@ -60,12 +60,28 @@ def test_postgres_migration_roundtrip(monkeypatch):
                 "WHERE account_id IN (SELECT id FROM accounts "
                 "WHERE name = 'Conta de demonstração') AND kind = 'expense'"
             )).one()
+            spaces = connection.execute(text(
+                "SELECT users.email, workspaces.name FROM users "
+                "JOIN memberships ON memberships.user_id = users.id "
+                "JOIN workspaces ON workspaces.id = memberships.workspace_id "
+                "ORDER BY users.email"
+            )).all()
+            installments = connection.scalar(text(
+                "SELECT count(*) FROM card_installments WHERE purchase_id IN "
+                "(SELECT id FROM card_purchases WHERE card_id IN "
+                "(SELECT id FROM credit_cards WHERE name = 'Cartão Exemplo'))"
+            ))
         assert rows == [
             ("antigo@example.com", "approved", False, False),
             ("gabrirauber@gmail.com", "approved", True, False),
             ("teste@teste.com.br", "pending", False, True),
         ]
         assert example == (3, 50000)
+        assert spaces == [
+            ("gabrirauber@gmail.com", "Casa"),
+            ("teste@teste.com.br", "Demonstração Rautto"),
+        ]
+        assert installments == 3
         command.upgrade(config, "head")
         command.check(config)
         assert "app_metadata" in inspect(engine).get_table_names()
@@ -88,7 +104,8 @@ def test_postgres_migration_roundtrip(monkeypatch):
             assert login.json()["demo"] is True
             headers = {"Authorization": f"Bearer {login.json()['token']}"}
             assert client.get("/auth/me", headers=headers).json()["demo"] is True
-            assert len(client.get("/workspaces", headers=headers).json()) == 1
+            demo_spaces = client.get("/workspaces", headers=headers).json()
+            assert [space["name"] for space in demo_spaces] == ["Demonstração Rautto"]
             blocked = client.post("/workspaces", headers=headers,
                                   json={"name": "Não permitido"})
             assert blocked.status_code == 403
