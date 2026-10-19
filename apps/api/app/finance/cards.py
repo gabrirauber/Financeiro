@@ -806,10 +806,11 @@ def refund_installment(
         data.invoice_month.day != 1
         or data.invoice_month < current.replace(day=1)
         or data.invoice_month > shift_month(current.replace(day=1), 1)
-        or data.invoice_month <= source.month
+        or data.invoice_month < source.month
+        or source.month > current.replace(day=1)
     ):
         raise HTTPException(
-            422, "Escolha a fatura atual ou a próxima, posterior à fatura original."
+            422, "Escolha a fatura atual ou a próxima, sem antecipar a fatura original."
         )
     refunded = (
         db.scalar(

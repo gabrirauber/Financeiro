@@ -224,3 +224,19 @@ def test_refund_rejects_paid_target_and_preserves_other_installments(client):
         db.get(Invoice, UUID(target["id"])).paid_on = date.fromisoformat(today())
         db.commit()
     assert credit(client, headers, root, source, 1000, "new-refund-request").status_code == 409
+
+
+def test_current_invoice_accepts_refund_for_last_month_purchase(client):
+    headers, root, _, _, _, source = prepare(client)
+    current = date.fromisoformat(today()).replace(day=1)
+    with Session(client.app.state.engine) as db:
+        invoice = db.get(Invoice, UUID(source["invoice_id"]))
+        invoice.month = current
+        db.commit()
+    result = credit(client, headers, root, source, 3000)
+    assert result.status_code == 201, result.text
+    assert result.json()["id"] == source["invoice_id"]
+    assert result.json()["total_cents"] == 7000
+    assert result.json()["remaining_cents"] == 7000
+    assert result.json()["installments"][0]["amount_cents"] == 10000
+    assert result.json()["installments"][0]["refunded_cents"] == 3000

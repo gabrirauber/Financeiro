@@ -4,7 +4,7 @@ Alterações locais para revisão. Envio ao GitHub, publicação da API e instal
 
 ## Estorno de uma cobrança antiga
 
-Em Cartões, abra a fatura de um mês anterior e use **Registrar estorno** na parcela original. Informe o valor (integral ou parcial), a data em que recebeu o crédito e a fatura que recebeu o crédito, atual ou próxima. A data do recebimento deve estar no mês corrente e não pode ser futura.
+Em Cartões, abra a fatura atual ou de um mês anterior e use **Registrar estorno** na parcela original. Informe o valor (integral ou parcial), a data em que recebeu o crédito e a fatura que recebeu o crédito, atual ou próxima. A data do recebimento deve estar no mês corrente e não pode ser futura.
 
 A compra, a fatura e o pagamento originais permanecem no histórico. O novo registro é um crédito no mesmo cartão, vinculado à parcela original. O saldo bancário não muda e o crédito não é receita. Outras parcelas de uma compra parcelada não são canceladas automaticamente: cada cobrança efetivamente devolvida tem seu próprio estorno.
 
@@ -32,4 +32,6 @@ O mecanismo SMTP existente permanece aguardando a escolha do remetente pelo usu�
 
 ## Validação
 
-Suíte completa: **75 testes passaram**, incluindo a migração em PostgreSQL. TypeScript e Ruff aprovados. Testes de API incluem histórico pago, estornos parciais, repetição de solicitação, limite por parcela, isolamento de espaços, crédito excedente, quitação pelo valor líquido, proteção de faturas pagas, preservação de outras parcelas e relatório PDF. A suíte completa também valida upgrade/downgrade e comparação do esquema com os modelos em PostgreSQL local descartável.
+Suíte completa: **76 testes passaram**, incluindo a migração em PostgreSQL. TypeScript e Ruff aprovados. Testes de API incluem histórico pago, estornos parciais, repetição de solicitação, limite por parcela, isolamento de espaços, crédito excedente, quitação pelo valor líquido, proteção de faturas pagas, preservação de outras parcelas e relatório PDF. A suíte completa também valida upgrade/downgrade e comparação do esquema com os modelos em PostgreSQL local descartável.
+
+Correção de acesso: Registrar estorno também aparece no formulário de correção da compra. Compras antigas na fatura atual podem receber crédito nessa mesma fatura, se não estiver paga.

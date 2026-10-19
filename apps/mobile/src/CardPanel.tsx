@@ -195,7 +195,7 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
     finally { setBusy(false); }
   }
   function startRefund(item: CardInstallment) {
-    setRefundItem(item); setRefundAmount(centsToInput(item.amount_cents - (item.refunded_cents || 0)));
+    setEditingPurchase(undefined); setRefundItem(item); setRefundAmount(centsToInput(item.amount_cents - (item.refunded_cents || 0)));
     const now = new Date();
     const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const existingCurrent = invoices.find(i => i.card_id === item.card_id && i.month.slice(0, 7) === monthIso(now));
@@ -225,7 +225,13 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
       .filter(item => item.purchase_id === purchaseId &&
         !item.invoice_paid && item.invoice_month.slice(0, 7) >= monthIso(new Date()))
       .sort((a, b) => a.sequence - b.sequence);
-    if (!editable.length) return setError('Esta compra não tem parcelas atuais ou futuras para corrigir.');
+    if (!editable.length) {
+      const item = current?.installments.find(row => row.purchase_id === purchaseId);
+      if (item && current!.month.slice(0, 7) <= monthIso(new Date()) && (item.refunded_cents || 0) < item.amount_cents) {
+        startRefund(item); return;
+      }
+      return setError('Esta compra não tem parcelas atuais ou futuras para corrigir.');
+    }
     setEditingPurchase(purchaseId);
     setInstallmentAmount(centsToInput(editable[0].amount_cents));
     setRemainingCount(String(editable.length));
@@ -331,7 +337,7 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
             <Text style={muted()}>{dateToDisplay(item.purchased_on)} · {money(item.amount_cents)}{item.invoice_paid ? ' · parcela já paga' : ''}</Text>
           </Pressable>
           {!!item.refunded_cents && <Text style={muted()}>Já estornado: {money(item.refunded_cents)}</Text>}
-          {current.month.slice(0, 7) < monthIso(new Date()) && (item.refunded_cents || 0) < item.amount_cents &&
+          {editingPurchase !== item.purchase_id && current.month.slice(0, 7) <= monthIso(new Date()) && (item.refunded_cents || 0) < item.amount_cents &&
             <Button label="Registrar estorno" secondary disabled={busy} onPress={() => startRefund(item)} />}
           {refundItem?.id === item.id && <Card>
             <Text style={label()}>Crédito recebido pelo estorno</Text>
@@ -358,6 +364,8 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
               keyboardType="number-pad" maxLength={3} value={remainingCount} onChangeText={setRemainingCount} />
             {!!parseCents(installmentAmount) && Number(remainingCount) > 0 &&
               <Text style={muted()}>Novo total a lançar: {money(parseCents(installmentAmount)! * Number(remainingCount))}.</Text>}
+            {current.month.slice(0, 7) <= monthIso(new Date()) && (item.refunded_cents || 0) < item.amount_cents &&
+              <Button label="Registrar estorno" secondary disabled={busy} onPress={() => startRefund(item)} />}
             <Button label={busy ? 'Salvando…' : 'Salvar correção'}
               onPress={() => { if (!busy) void saveCorrection(); }} />
             <Button label="Excluir compra" secondary onPress={confirmDeletePurchase} disabled={busy} />
