@@ -8,7 +8,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.finance.card_models import FinancingInstallment, Invoice, InvoiceAdvance, InvoiceFinancing
-from app.finance.cards import invoice_advance_total, invoice_remaining, invoice_total
+from app.finance.cards import (
+    invoice_advance_total,
+    invoice_remaining,
+    invoice_total,
+    protect_credit_history,
+)
 from app.finance.cycles import split_cents
 from app.finance.models import Movement
 from app.finance.routes import (
@@ -45,11 +50,15 @@ def financing_parts(db, invoice):
     financing = db.scalar(
         select(InvoiceFinancing).where(InvoiceFinancing.source_invoice_id == invoice.id)
     )
-    parts = db.scalars(
-        select(FinancingInstallment)
-        .where(FinancingInstallment.financing_id == financing.id)
-        .order_by(FinancingInstallment.sequence)
-    ).all() if financing else []
+    parts = (
+        db.scalars(
+            select(FinancingInstallment)
+            .where(FinancingInstallment.financing_id == financing.id)
+            .order_by(FinancingInstallment.sequence)
+        ).all()
+        if financing
+        else []
+    )
     if any(db.get(Invoice, part.invoice_id).paid_on for part in parts):
         raise HTTPException(409, "Há parcelas futuras já pagas. Desfaça esses pagamentos antes.")
     return financing, parts
@@ -57,10 +66,15 @@ def financing_parts(db, invoice):
 
 @router.patch("/bill-payments/{movement_id}")
 def edit_payment(
-    workspace_id: UUID, movement_id: UUID, data: PaymentCorrection, db: Db, user: CurrentUser,
+    workspace_id: UUID,
+    movement_id: UUID,
+    data: PaymentCorrection,
+    db: Db,
+    user: CurrentUser,
 ):
     workspace, _ = require_member(db, workspace_id, user.id, lock=True)
     movement, advance, invoice = payment_or_404(db, workspace_id, movement_id)
+    protect_credit_history(db, invoice)
     require_current_month(workspace, movement.occurred_on)
     require_current_month(workspace, data.occurred_on)
     if data.occurred_on > today(workspace):
@@ -76,12 +90,15 @@ def edit_payment(
             )
         if data.occurred_on > invoice.closes_on:
             raise HTTPException(422, "Antecipações devem ocorrer antes do fechamento.")
-        available = invoice_total(db, invoice.id) - sum(
-            item.amount_cents for item in db.scalars(
+        available = invoice_remaining(db, invoice.id) + advance.amount_cents
+        previous_available = invoice_total(db, invoice.id) - sum(
+            item.amount_cents
+            for item in db.scalars(
                 select(InvoiceAdvance).where(InvoiceAdvance.invoice_id == invoice.id)
-            ) if item.id != advance.id
+            )
+            if item.id != advance.id
         )
-        if data.amount_cents > available:
+        if data.amount_cents > min(available, previous_available):
             raise HTTPException(422, "A antecipação não pode superar o saldo da fatura.")
         advance.amount_cents = data.amount_cents
     else:
@@ -121,6 +138,7 @@ def edit_payment(
 def undo_payment(workspace_id: UUID, movement_id: UUID, db: Db, user: CurrentUser):
     workspace, _ = require_member(db, workspace_id, user.id, lock=True)
     movement, advance, invoice = payment_or_404(db, workspace_id, movement_id)
+    protect_credit_history(db, invoice)
     require_current_month(workspace, movement.occurred_on)
     if advance:
         if invoice.paid_on:
@@ -133,9 +151,7 @@ def undo_payment(workspace_id: UUID, movement_id: UUID, db: Db, user: CurrentUse
             if invoice_advance_total(db, part.invoice_id) > (
                 invoice_total(db, part.invoice_id) - part.amount_cents
             ):
-                raise HTTPException(
-                    409, "Desfaça as antecipações das faturas futuras antes."
-                )
+                raise HTTPException(409, "Desfaça as antecipações das faturas futuras antes.")
             db.delete(part)
         if financing:
             db.delete(financing)

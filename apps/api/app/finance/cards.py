@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from app.finance.card_models import (
     CardInstallment,
     CardPurchase,
+    CardRefund,
     CreditCard,
     FinancingInstallment,
     Invoice,
@@ -119,6 +120,7 @@ def serialize_installment(row, purchase, invoice, card, settled=False):
         "category_id": row.category_id,
         "subcategory_id": row.subcategory_id,
         "note": row.note,
+        "refunded_cents": getattr(row, "refunded_cents", 0),
     }
 
 
@@ -131,7 +133,7 @@ def financing_installment_rows(db, invoice_id):
     ).all()
 
 
-def invoice_total(db, invoice_id):
+def invoice_gross_total(db, invoice_id):
     purchases = (
         db.scalar(
             select(func.sum(CardInstallment.amount_cents)).where(
@@ -151,6 +153,54 @@ def invoice_total(db, invoice_id):
     return purchases + financed
 
 
+def invoice_refund_total(db, invoice_id):
+    return (
+        db.scalar(
+            select(func.sum(CardRefund.amount_cents)).where(CardRefund.invoice_id == invoice_id)
+        )
+        or 0
+    )
+
+
+def invoice_total(db, invoice_id):
+    return invoice_gross_total(db, invoice_id) - invoice_refund_total(db, invoice_id)
+
+
+def invoice_credit_brought(db, invoice):
+    """Only unused card credit rolls forward; it never becomes bank income."""
+    credit = 0
+    for previous in db.scalars(
+        select(Invoice)
+        .where(Invoice.card_id == invoice.card_id, Invoice.month < invoice.month)
+        .order_by(Invoice.month)
+    ):
+        net = invoice_total(db, previous.id) - invoice_advance_total(db, previous.id) - credit
+        credit = max(0, -net)
+    return credit
+
+
+def protect_credit_history(db, invoice, force=False):
+    has_refunds = db.scalar(
+        select(CardRefund.id)
+        .join(Invoice, Invoice.id == CardRefund.invoice_id)
+        .where(Invoice.card_id == invoice.card_id)
+        .limit(1)
+    )
+    if (force or has_refunds) and db.scalar(
+        select(Invoice.id)
+        .where(
+            Invoice.card_id == invoice.card_id,
+            Invoice.month > invoice.month,
+            Invoice.paid_on.is_not(None),
+        )
+        .limit(1)
+    ):
+        raise HTTPException(
+            409,
+            "Há faturas posteriores pagas. Desfaça esses pagamentos antes de alterar os créditos.",
+        )
+
+
 def invoice_advance_total(db, invoice_id):
     return (
         db.scalar(
@@ -163,7 +213,13 @@ def invoice_advance_total(db, invoice_id):
 
 
 def invoice_remaining(db, invoice_id):
-    return invoice_total(db, invoice_id) - invoice_advance_total(db, invoice_id)
+    invoice = db.get(Invoice, invoice_id)
+    return max(
+        0,
+        invoice_total(db, invoice_id)
+        - invoice_advance_total(db, invoice_id)
+        - invoice_credit_brought(db, invoice),
+    )
 
 
 def invoice_settled(db, invoice, current):
@@ -203,7 +259,23 @@ def serialize_invoice(db, invoice, card, current):
     ).all()
     advance_total = sum(item.amount_cents for item in advances)
     total = invoice_total(db, invoice.id)
-    remaining = total - advance_total
+    brought = invoice_credit_brought(db, invoice)
+    net = total - advance_total - brought
+    remaining = max(0, net)
+    refunds = db.scalars(
+        select(CardRefund)
+        .where(CardRefund.invoice_id == invoice.id)
+        .order_by(CardRefund.created_at, CardRefund.id)
+    ).all()
+    for item, _ in installments:
+        item.refunded_cents = (
+            db.scalar(
+                select(func.sum(CardRefund.amount_cents)).where(
+                    CardRefund.source_installment_id == item.id
+                )
+            )
+            or 0
+        )
     settled = current > invoice.closes_on and remaining == 0
     return {
         "id": invoice.id,
@@ -226,6 +298,19 @@ def serialize_invoice(db, invoice, card, current):
         "financed_total_cents": sum(item.amount_cents for item, _ in financed_rows),
         "total_cents": total,
         "advanced_cents": advance_total,
+        "refund_total_cents": invoice_refund_total(db, invoice.id),
+        "credit_brought_cents": brought,
+        "credit_balance_cents": max(0, -net),
+        "refunds": [
+            {
+                "id": item.id,
+                "source_installment_id": item.source_installment_id,
+                "amount_cents": item.amount_cents,
+                "credited_on": item.credited_on,
+                "note": item.note,
+            }
+            for item in refunds
+        ],
         "remaining_cents": 0 if invoice.paid_on else remaining,
         "advances": [{"id": item.id, "amount_cents": item.amount_cents} for item in advances],
         "installments": [
@@ -309,9 +394,11 @@ def edit_card(workspace_id: UUID, card_id: UUID, data: CardInput, db: Db, user: 
 def ensure_invoice(db, card, month, current=None):
     row = db.scalar(select(Invoice).where(Invoice.card_id == card.id, Invoice.month == month))
     if row:
+        protect_credit_history(db, row)
         if row.paid_on or (current is not None and invoice_settled(db, row, current)):
             raise HTTPException(409, "Fatura paga: não é possível alterar suas compras.")
         return row
+    protect_credit_history(db, Invoice(card_id=card.id, month=month))
     _, closes_on, due_on = cycle_for_due_month(card, month)
     row = Invoice(card_id=card.id, month=month, closes_on=closes_on, due_on=due_on)
     db.add(row)
@@ -492,6 +579,7 @@ def edit_remaining(
     if purchase is None:
         raise HTTPException(404, "Compra não encontrada.")
     card = card_or_404(db, workspace_id, purchase.card_id)
+    protect_refunded_purchase(db, purchase)
     rows = db.execute(
         select(CardInstallment, Invoice)
         .join(Invoice, CardInstallment.invoice_id == Invoice.id)
@@ -561,11 +649,16 @@ def edit_remaining(
     total_count = editable[0][0].sequence + count - 1
     for index, (invoice, item, cents) in enumerate(targets):
         if item is None:
-            item = CardInstallment(purchase_id=purchase.id, invoice_id=invoice.id,
-                                   sequence=editable[0][0].sequence + index,
-                                   total_count=total_count, amount_cents=cents,
-                                   category_id=category.id, subcategory_id=sub.id,
-                                   note=data.note.strip())
+            item = CardInstallment(
+                purchase_id=purchase.id,
+                invoice_id=invoice.id,
+                sequence=editable[0][0].sequence + index,
+                total_count=total_count,
+                amount_cents=cents,
+                category_id=category.id,
+                subcategory_id=sub.id,
+                note=data.note.strip(),
+            )
             db.add(item)
             continue
         item.amount_cents = cents
@@ -579,7 +672,11 @@ def edit_remaining(
     )
     db.flush()
     for _, invoice in removed:
-        if not invoice.paid_on and invoice_total(db, invoice.id) == 0:
+        if (
+            not invoice.paid_on
+            and invoice_gross_total(db, invoice.id) == 0
+            and not invoice_refund_total(db, invoice.id)
+        ):
             db.delete(invoice)
     db.commit()
     updated = db.execute(
@@ -597,14 +694,13 @@ def edit_remaining(
 
 
 @router.delete("/card-purchases/{purchase_id}", status_code=204)
-def delete_purchase_remaining(
-    workspace_id: UUID, purchase_id: UUID, db: Db, user: CurrentUser
-):
+def delete_purchase_remaining(workspace_id: UUID, purchase_id: UUID, db: Db, user: CurrentUser):
     workspace, _ = require_member(db, workspace_id, user.id, lock=True)
     purchase = db.get(CardPurchase, purchase_id)
     if purchase is None:
         raise HTTPException(404, "Compra não encontrada.")
     card_or_404(db, workspace_id, purchase.card_id)
+    protect_refunded_purchase(db, purchase)
     rows = db.execute(
         select(CardInstallment, Invoice)
         .join(Invoice, CardInstallment.invoice_id == Invoice.id)
@@ -614,7 +710,8 @@ def delete_purchase_remaining(
     current = today(workspace)
     current_month = current.replace(day=1)
     removable = [
-        (item, invoice) for item, invoice in rows
+        (item, invoice)
+        for item, invoice in rows
         if invoice.month >= current_month and not invoice_settled(db, invoice, current)
     ]
     if not removable:
@@ -623,6 +720,8 @@ def delete_purchase_remaining(
     for item, invoice in removable:
         removed_by_invoice[invoice.id] = removed_by_invoice.get(invoice.id, 0) + item.amount_cents
     affected_invoices = {invoice.id: invoice for _, invoice in removable}
+    for invoice in affected_invoices.values():
+        protect_credit_history(db, invoice)
     for invoice_id, amount in removed_by_invoice.items():
         if invoice_total(db, invoice_id) - amount < invoice_advance_total(db, invoice_id):
             raise HTTPException(
@@ -630,11 +729,12 @@ def delete_purchase_remaining(
             )
     for item, _ in removable:
         db.delete(item)
-    kept_total = sum(item.amount_cents for item, invoice in rows if
-                     (item, invoice) not in removable)
-    occurrence = db.scalar(select(RecurringOccurrence).where(
-        RecurringOccurrence.purchase_id == purchase.id
-    ))
+    kept_total = sum(
+        item.amount_cents for item, invoice in rows if (item, invoice) not in removable
+    )
+    occurrence = db.scalar(
+        select(RecurringOccurrence).where(RecurringOccurrence.purchase_id == purchase.id)
+    )
     if kept_total or occurrence:
         # A ocorrência permanece vinculada para não lançar a mesma assinatura novamente.
         purchase.total_cents = kept_total
@@ -642,8 +742,107 @@ def delete_purchase_remaining(
         db.delete(purchase)
     db.flush()
     for invoice in affected_invoices.values():
-        if not invoice.paid_on and invoice_total(db, invoice.id) == 0 and not db.scalar(
-            select(InvoiceFinancing.id).where(InvoiceFinancing.source_invoice_id == invoice.id)
+        if (
+            not invoice.paid_on
+            and invoice_gross_total(db, invoice.id) == 0
+            and not invoice_refund_total(db, invoice.id)
+            and not db.scalar(
+                select(InvoiceFinancing.id).where(InvoiceFinancing.source_invoice_id == invoice.id)
+            )
         ):
             db.delete(invoice)
     db.commit()
+
+
+class RefundInput(BaseModel):
+    amount_cents: int = Field(gt=0, le=MAX_CENTS)
+    credited_on: date
+    invoice_month: date
+    note: str = Field(default="", max_length=200)
+    request_id: str = Field(min_length=8, max_length=80)
+
+
+def protect_refunded_purchase(db, purchase):
+    if db.scalar(
+        select(CardRefund.id)
+        .join(CardInstallment, CardInstallment.id == CardRefund.source_installment_id)
+        .where(CardInstallment.purchase_id == purchase.id)
+        .limit(1)
+    ):
+        raise HTTPException(409, "Compra com estorno registrado: o histórico deve ser preservado.")
+
+
+@router.post("/card-installments/{installment_id}/refund", status_code=201)
+def refund_installment(
+    workspace_id: UUID, installment_id: UUID, data: RefundInput, db: Db, user: CurrentUser
+):
+    workspace, _ = require_member(db, workspace_id, user.id, lock=True)
+    item = db.get(CardInstallment, installment_id)
+    if item is None:
+        raise HTTPException(404, "Parcela não encontrada.")
+    source, card = invoice_or_404(db, workspace_id, item.invoice_id)
+    existing = db.scalar(
+        select(CardRefund).where(
+            CardRefund.source_installment_id == item.id, CardRefund.request_id == data.request_id
+        )
+    )
+    if existing:
+        target = db.get(Invoice, existing.invoice_id)
+        if (
+            existing.amount_cents != data.amount_cents
+            or existing.credited_on != data.credited_on
+            or target.month != data.invoice_month
+            or existing.note != data.note.strip()
+        ):
+            raise HTTPException(409, "Esta solicitação já foi usada para outro estorno.")
+        return serialize_invoice(db, target, card, today(workspace))
+    current = today(workspace)
+    if data.credited_on.replace(day=1) != current.replace(day=1) or data.credited_on > current:
+        raise HTTPException(422, "Informe a data do crédito no mês corrente, até hoje.")
+    purchase = db.get(CardPurchase, item.purchase_id)
+    if data.credited_on < purchase.purchased_on:
+        raise HTTPException(422, "O crédito não pode ser anterior à compra.")
+    if (
+        data.invoice_month.day != 1
+        or data.invoice_month < current.replace(day=1)
+        or data.invoice_month > shift_month(current.replace(day=1), 1)
+        or data.invoice_month <= source.month
+    ):
+        raise HTTPException(
+            422, "Escolha a fatura atual ou a próxima, posterior à fatura original."
+        )
+    refunded = (
+        db.scalar(
+            select(func.sum(CardRefund.amount_cents)).where(
+                CardRefund.source_installment_id == item.id
+            )
+        )
+        or 0
+    )
+    if refunded + data.amount_cents > item.amount_cents:
+        raise HTTPException(422, "O estorno excede o valor ainda não estornado desta parcela.")
+    # A closed but unpaid bill can receive a credit confirmed by the bank.
+    target = db.scalar(
+        select(Invoice).where(Invoice.card_id == card.id, Invoice.month == data.invoice_month)
+    )
+    if target is None:
+        _, closes, due = cycle_for_due_month(card, data.invoice_month)
+        target = Invoice(card_id=card.id, month=data.invoice_month, closes_on=closes, due_on=due)
+        db.add(target)
+        db.flush()
+    if target.paid_on:
+        raise HTTPException(409, "A fatura de destino já foi paga. Escolha a próxima fatura.")
+    protect_credit_history(db, target, force=True)
+    db.add(
+        CardRefund(
+            source_installment_id=item.id,
+            invoice_id=target.id,
+            amount_cents=data.amount_cents,
+            credited_on=data.credited_on,
+            note=data.note.strip(),
+            request_id=data.request_id,
+            created_at=datetime.now(timezone.utc),
+        )
+    )
+    db.commit()
+    return serialize_invoice(db, target, card, current)

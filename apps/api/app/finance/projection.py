@@ -7,7 +7,12 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 
 from app.finance.card_models import CreditCard, Invoice, InvoiceFinancing
-from app.finance.cards import invoice_advance_total, invoice_total
+from app.finance.cards import (
+    invoice_advance_total,
+    invoice_credit_brought,
+    invoice_remaining,
+    invoice_total,
+)
 from app.finance.cycles import day_in_month, first_cycle, shift_month
 from app.finance.income_plans import generate_month as generate_income
 from app.finance.models import Account, Movement
@@ -43,14 +48,17 @@ def historical_balance(db, workspace_id, last_day):
 
 
 def movement_total(db, workspace_id, month, kind):
-    return db.scalar(
-        select(func.sum(Movement.amount_cents)).where(
-            Movement.workspace_id == workspace_id,
-            Movement.kind == kind,
-            Movement.occurred_on >= month,
-            Movement.occurred_on < shift_month(month, 1),
+    return (
+        db.scalar(
+            select(func.sum(Movement.amount_cents)).where(
+                Movement.workspace_id == workspace_id,
+                Movement.kind == kind,
+                Movement.occurred_on >= month,
+                Movement.occurred_on < shift_month(month, 1),
+            )
         )
-    ) or 0
+        or 0
+    )
 
 
 def remaining_income(db, workspace_id, month):
@@ -61,59 +69,69 @@ def remaining_income(db, workspace_id, month):
     ).all()
     if not rows:
         return 0
-    received = dict(db.execute(
-        select(IncomeReceipt.occurrence_id, func.sum(Movement.amount_cents))
-        .join(Movement, Movement.id == IncomeReceipt.movement_id)
-        .where(IncomeReceipt.occurrence_id.in_([row.id for row in rows]))
-        .group_by(IncomeReceipt.occurrence_id)
-    ).all())
+    received = dict(
+        db.execute(
+            select(IncomeReceipt.occurrence_id, func.sum(Movement.amount_cents))
+            .join(Movement, Movement.id == IncomeReceipt.movement_id)
+            .where(IncomeReceipt.occurrence_id.in_([row.id for row in rows]))
+            .group_by(IncomeReceipt.occurrence_id)
+        ).all()
+    )
     return sum(
         max(0, row.expected_cents - (received.get(row.id) or 0))
-        for row in rows if not row.completed
+        for row in rows
+        if not row.completed
     )
 
 
 def pending_fixed(db, workspace_id, month):
-    return db.scalar(
-        select(func.sum(RecurringOccurrence.amount_cents))
-        .join(RecurringRule, RecurringRule.id == RecurringOccurrence.rule_id)
-        .where(
-            RecurringRule.workspace_id == workspace_id,
-            RecurringRule.kind == "expense",
-            RecurringOccurrence.month == month,
-            RecurringOccurrence.expense_id.is_(None),
+    return (
+        db.scalar(
+            select(func.sum(RecurringOccurrence.amount_cents))
+            .join(RecurringRule, RecurringRule.id == RecurringOccurrence.rule_id)
+            .where(
+                RecurringRule.workspace_id == workspace_id,
+                RecurringRule.kind == "expense",
+                RecurringOccurrence.month == month,
+                RecurringOccurrence.expense_id.is_(None),
+            )
         )
-    ) or 0
+        or 0
+    )
 
 
-def projected_card_recurring(db, workspace_id, month, current):
+def projected_card_recurring(db, workspace_id, month, current, card_id_filter=None):
     """Assinaturas ainda não lançadas contam na fatura futura prevista."""
     total = 0
-    rules = db.scalars(select(RecurringRule).where(
-        RecurringRule.workspace_id == workspace_id,
-        RecurringRule.kind == "card",
-        RecurringRule.active.is_(True),
-    )).all()
+    rules = db.scalars(
+        select(RecurringRule).where(
+            RecurringRule.workspace_id == workspace_id,
+            RecurringRule.kind == "card",
+            RecurringRule.active.is_(True),
+        )
+    ).all()
     for source_month in (shift_month(month, -1), month):
         for rule in rules:
             if rule.start_month > source_month:
                 continue
-            occurrence = db.scalar(select(RecurringOccurrence).where(
-                RecurringOccurrence.rule_id == rule.id,
-                RecurringOccurrence.month == source_month,
-            ))
+            occurrence = db.scalar(
+                select(RecurringOccurrence).where(
+                    RecurringOccurrence.rule_id == rule.id,
+                    RecurringOccurrence.month == source_month,
+                )
+            )
             if occurrence and occurrence.purchase_id:
                 continue
             card_id = occurrence.card_id if occurrence else rule.card_id
             card = db.get(CreditCard, card_id) if card_id else None
-            if card is None or not card.active:
+            if card is None or not card.active or (card_id_filter and card.id != card_id_filter):
                 continue
             due = occurrence.due_on if occurrence else day_in_month(source_month, rule.day_of_month)
             bill_month = first_cycle(card, due)[0]
             for _ in range(13):
-                invoice = db.scalar(select(Invoice).where(
-                    Invoice.card_id == card.id, Invoice.month == bill_month
-                ))
+                invoice = db.scalar(
+                    select(Invoice).where(Invoice.card_id == card.id, Invoice.month == bill_month)
+                )
                 if invoice is None or (invoice.paid_on is None and invoice.closes_on >= current):
                     break
                 bill_month = shift_month(bill_month, 1)
@@ -123,44 +141,76 @@ def projected_card_recurring(db, workspace_id, month, current):
 
 
 def invoice_amounts(db, workspace_id, month):
-    invoices = db.scalars(select(Invoice)
+    invoices = db.scalars(
+        select(Invoice)
         .join(CreditCard, CreditCard.id == Invoice.card_id)
-        .where(CreditCard.workspace_id == workspace_id, Invoice.month == month)).all()
+        .where(CreditCard.workspace_id == workspace_id, Invoice.month == month)
+    ).all()
     commitment = pending = refinanced = 0
     for invoice in invoices:
         total = invoice_total(db, invoice.id)
-        financing = db.scalar(select(InvoiceFinancing).where(
-            InvoiceFinancing.source_invoice_id == invoice.id
-        ))
+        financing = db.scalar(
+            select(InvoiceFinancing).where(InvoiceFinancing.source_invoice_id == invoice.id)
+        )
         transferred = financing.principal_cents if financing else 0
         refinanced += transferred
         commitment += total - transferred
         if invoice.paid_on is None:
-            pending += max(0, total - invoice_advance_total(db, invoice.id))
+            pending += invoice_remaining(db, invoice.id)
     return commitment, pending, refinanced
 
 
 def overdue_amount(db, workspace_id, before_month):
-    fixed = db.scalar(
-        select(func.sum(RecurringOccurrence.amount_cents))
-        .join(RecurringRule, RecurringRule.id == RecurringOccurrence.rule_id)
-        .where(
-            RecurringRule.workspace_id == workspace_id,
-            RecurringRule.kind == "expense",
-            RecurringOccurrence.month < before_month,
-            RecurringOccurrence.expense_id.is_(None),
+    fixed = (
+        db.scalar(
+            select(func.sum(RecurringOccurrence.amount_cents))
+            .join(RecurringRule, RecurringRule.id == RecurringOccurrence.rule_id)
+            .where(
+                RecurringRule.workspace_id == workspace_id,
+                RecurringRule.kind == "expense",
+                RecurringOccurrence.month < before_month,
+                RecurringOccurrence.expense_id.is_(None),
+            )
         )
-    ) or 0
-    invoices = db.scalars(select(Invoice)
+        or 0
+    )
+    invoices = db.scalars(
+        select(Invoice)
         .join(CreditCard, CreditCard.id == Invoice.card_id)
         .where(
             CreditCard.workspace_id == workspace_id,
             Invoice.month < before_month,
             Invoice.paid_on.is_(None),
-        )).all()
-    card = sum(max(0, invoice_total(db, invoice.id) - invoice_advance_total(db, invoice.id))
-               for invoice in invoices)
+        )
+    ).all()
+    card = sum(invoice_remaining(db, invoice.id) for invoice in invoices)
     return fixed + card
+
+
+def projected_card_pending(db, workspace_id, month, current):
+    total = 0
+    for card in db.scalars(select(CreditCard).where(CreditCard.workspace_id == workspace_id)):
+        step = current.replace(day=1)
+        credit = invoice_credit_brought(db, Invoice(card_id=card.id, month=step))
+        while step <= month:
+            invoice = db.scalar(
+                select(Invoice).where(Invoice.card_id == card.id, Invoice.month == step)
+            )
+            virtual = projected_card_recurring(db, workspace_id, step, current, card.id)
+            net = (
+                (
+                    (invoice_total(db, invoice.id) - invoice_advance_total(db, invoice.id))
+                    if invoice
+                    else 0
+                )
+                + virtual
+                - credit
+            )
+            credit = max(0, -net)
+            if step == month and (invoice is None or invoice.paid_on is None):
+                total += max(0, net)
+            step = shift_month(step, 1)
+    return total
 
 
 def month_values(db, workspace_id, month, current, historical):
@@ -171,7 +221,9 @@ def month_values(db, workspace_id, month, current, historical):
     card, card_pending, refinanced = invoice_amounts(db, workspace_id, month)
     card_virtual = 0 if historical else projected_card_recurring(db, workspace_id, month, current)
     card += card_virtual
-    card_pending += card_virtual
+    card_pending = (
+        card_pending if historical else projected_card_pending(db, workspace_id, month, current)
+    )
     income = received + expected
     committed = paid_expenses + fixed + card
     return {
@@ -247,7 +299,11 @@ def build_projection(db, workspace_id, workspace, target):
 
 
 @router.get("/projection")
-def projection(workspace_id: UUID, db: Db, user: CurrentUser,
-               month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")):
+def projection(
+    workspace_id: UUID,
+    db: Db,
+    user: CurrentUser,
+    month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+):
     workspace, _ = require_member(db, workspace_id, user.id, lock=True)
     return build_projection(db, workspace_id, workspace, parse_month(month))

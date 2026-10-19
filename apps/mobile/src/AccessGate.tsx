@@ -5,6 +5,7 @@ import { ApiError, request, User, Workspace } from './api';
 import { clearSession, readSession, saveSession } from './session';
 import { MembersPanel } from './MembersPanel';
 import { Recovery } from './Recovery';
+import { PasswordInput } from './PasswordInput';
 import { Button, Card, palette, ThemeMode } from './ui';
 import { useToastSetter } from './Toast';
 import { readPreviousOnboardingStep } from './onboardingProgress';
@@ -25,6 +26,7 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
   const [code, setCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(true);
   const setError = useToastSetter('error');
@@ -49,7 +51,7 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
   }
   async function resetSession() {
     tokenRef.current = undefined;
-    setRegister(false); setPassword('');
+    setRegister(false); setPassword(''); setConfirmation('');
     await clearSession(); setToken(undefined); setUser(undefined); setSelected(undefined); setManaging(false);
   }
   async function run(action: () => Promise<void>) {
@@ -108,19 +110,21 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
   if (recover) return <SafeAreaView style={{flex:1,backgroundColor:palette.bg}}><Recovery token={resetToken} onDone={() => { void resetSession(); setRecover(false); setResetToken(undefined); }} /></SafeAreaView>;
 
   async function authenticate() {
+    if (busy) return;
+    if (register && password !== confirmation) return setError('As senhas não coincidem.');
     await run(async () => {
       const result = await request<{ token?: string; status?: 'pending'; demo?: boolean }>(register ? '/auth/register' : '/auth/login', undefined, 'POST', {
         email: email.trim(), password,
         ...(register ? (code.trim() ? {invite_code: code.trim()} : {workspace_name: 'Minhas finanças'}) : {}),
       });
       if (result.status === 'pending') {
-        setPendingMessage(true); setRegister(false); setPassword(''); setCode('');
+        setPendingMessage(true); setRegister(false); setPassword(''); setConfirmation(''); setCode('');
         return;
       }
       if (!result.token) throw new Error('Não foi possível iniciar a sessão. Tente novamente.');
       setPendingMessage(false);
       if (!result.demo) await saveSession(result.token);
-      activate(result.token); setPassword('');
+      activate(result.token); setPassword(''); setConfirmation('');
       setCode('');
       await load(result.token);
     });
@@ -159,14 +163,15 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
       {!user ? <Card>
         <Text style={{ fontSize: 22, color: palette.ink }}>{register ? 'Crie seu acesso' : 'Boas-vindas'}</Text>
         <TextInput accessibilityLabel="E-mail" placeholder="E-mail" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} style={input()} editable={!busy} />
-        <TextInput accessibilityLabel="Senha" placeholder={register ? 'Senha (mínimo 10 caracteres)' : 'Senha'} secureTextEntry value={password} onChangeText={setPassword} style={input()} editable={!busy} maxLength={128} />
+        <PasswordInput key={register ? 'register' : 'login'} accessibilityLabel="Senha" placeholder={register ? 'Senha (mínimo 10 caracteres)' : 'Senha'} value={password} onChangeText={setPassword} style={input()} editable={!busy} maxLength={128} />
         {register && <>
+          <PasswordInput accessibilityLabel="Confirmar senha" placeholder="Confirme a senha" value={confirmation} onChangeText={setConfirmation} style={input()} editable={!busy} maxLength={128} />
           <Text style={{color: palette.muted}}>Recebeu um convite? Informe o código para entrar no espaço compartilhado. Sem código, criaremos seu espaço automaticamente.</Text>
           <TextInput accessibilityLabel="Código de convite (opcional)" placeholder="Código de convite (opcional)" autoCapitalize="characters" value={code} onChangeText={setCode} style={input()} editable={!busy} maxLength={64} />
         </>}
         {!busy && <>
           <Button label={register ? 'Cadastrar' : 'Entrar'} onPress={() => void authenticate()} />
-          <Button label={register ? 'Já tenho cadastro' : 'Criar cadastro'} secondary onPress={() => { setRegister(!register); setError(''); }} />
+          <Button label={register ? 'Já tenho cadastro' : 'Criar cadastro'} secondary onPress={() => { setRegister(!register); setPassword(''); setConfirmation(''); setError(''); }} />
           <Button label="Esqueci minha senha" secondary onPress={() => setRecover(true)} />{token && <Button label="Tentar restaurar sessão" secondary onPress={() => void run(() => load(token))} />}
         </>}
       </Card> : <>

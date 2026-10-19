@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Keyboard, Platform, Pressable, Switch, Text, TextInput, View } from 'react-native';
 import { request, Workspace } from './api';
-import { Account, Category, CreditCard, Invoice, Subcategory, dateToDisplay, dateToIso, monthIso } from './finance';
+import { Account, Category, CreditCard, Invoice, CardInstallment, Subcategory, dateToDisplay, dateToIso, monthIso } from './finance';
 import { localDate, money, parseCents } from './prototype';
 import { MoneyInput } from './MoneyInput';
 import { CategoryCreator } from './CategoryCreator';
@@ -21,6 +21,12 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [refundItem, setRefundItem] = useState<CardInstallment>();
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundMonth, setRefundMonth] = useState('');
+  const [refundDate, setRefundDate] = useState('');
+  const [refundNote, setRefundNote] = useState('');
+  const [refundRequest, setRefundRequest] = useState('');
   const [selected, setSelected] = useState<string>();
   const [payAccount, setPayAccount] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -188,6 +194,31 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível antecipar o pagamento.'); }
     finally { setBusy(false); }
   }
+  function startRefund(item: CardInstallment) {
+    setRefundItem(item); setRefundAmount(centsToInput(item.amount_cents - (item.refunded_cents || 0)));
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const existingCurrent = invoices.find(i => i.card_id === item.card_id && i.month.slice(0, 7) === monthIso(now));
+    setRefundMonth(monthIso(existingCurrent?.paid_on ? next : now));
+    setRefundDate(localDate(now)); setRefundNote('');
+    setRefundRequest(`${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
+  }
+  async function saveRefund() {
+    const cents = parseCents(refundAmount);
+    if (!refundItem || !cents || cents > refundItem.amount_cents - (refundItem.refunded_cents || 0))
+      return setError('Informe um valor até o saldo ainda não estornado da parcela.');
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(refundDate)) return setError('Informe a data do crédito como DD/MM/AAAA.');
+    setBusy(true);
+    try {
+      const result = await request<Invoice>(`${root}/card-installments/${refundItem.id}/refund`, token, 'POST', {
+        amount_cents: cents, credited_on: dateToIso(refundDate), invoice_month: `${refundMonth}-01`,
+        note: refundNote.trim(), request_id: refundRequest,
+      });
+      setRefundItem(undefined); setSelected(result.id);
+      await load(); refresh(); setNotice('Estorno registrado como crédito na fatura selecionada.');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível registrar o estorno.'); }
+    finally { setBusy(false); }
+  }
   const current = invoices.find(x => x.id === selected);
   function startCorrection(purchaseId: string) {
     const editable = invoices.flatMap(invoice => invoice.installments)
@@ -268,7 +299,7 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
     <Text style={{ fontSize: 28, fontWeight: '700', color: palette.ink }}>Seus cartões</Text>
     <Text style={muted()}>Compras por fatura. O saldo da conta muda quando a fatura é paga.</Text>
     {current ? <>
-      <Button secondary label="← Todas as faturas" onPress={() => { setSelected(undefined); setPartialOpen(false); setAdvanceOpen(false); }} />
+      <Button secondary label="← Todas as faturas" onPress={() => { setSelected(undefined); setPartialOpen(false); setAdvanceOpen(false); setRefundItem(undefined); }} />
       <Card>
         <Text style={label()}>{current.card_name} · {current.month.slice(0, 7).split('-').reverse().join('/')}</Text>
         <Text style={muted()}>Saldo a pagar</Text>
@@ -279,6 +310,10 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
           current.status === 'paid' ? `Paga em ${dateToDisplay(current.paid_on!)}` :
           current.status === 'open' ? 'Fatura aberta' :
           current.status === 'settled' ? 'Quitada por antecipações' : 'Fatura fechada · aguardando pagamento'}</Text>
+        {!!current.refund_total_cents && <Text style={muted()}>Estornos nesta fatura: {money(current.refund_total_cents)}</Text>}
+        {!!current.credit_brought_cents && <Text style={muted()}>Crédito de faturas anteriores: {money(current.credit_brought_cents)}</Text>}
+        {!!current.credit_balance_cents && <Text style={muted()}>Crédito disponível para próximas faturas: {money(current.credit_balance_cents)}. Esse valor permanece no cartão.</Text>}
+        {current.refunds?.map(item => <Text key={item.id} style={muted()}>Crédito de estorno em {dateToDisplay(item.credited_on)}: −{money(item.amount_cents)}{item.note ? ` · ${item.note}` : ''}</Text>)}
         {current.advances.map(item => <Text key={item.id} style={muted()}>Antecipação registrada: {money(item.amount_cents)}</Text>)}
         {current.financing && <Text style={muted()}>Pago agora: {money(current.financing.paid_cents)} ·
           Principal parcelado: {money(current.financing.principal_cents)} ·
@@ -295,6 +330,23 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
             <Text style={label()}>{item.note || 'Compra no crédito'} · {item.sequence}/{item.total_count}</Text>
             <Text style={muted()}>{dateToDisplay(item.purchased_on)} · {money(item.amount_cents)}{item.invoice_paid ? ' · parcela já paga' : ''}</Text>
           </Pressable>
+          {!!item.refunded_cents && <Text style={muted()}>Já estornado: {money(item.refunded_cents)}</Text>}
+          {current.month.slice(0, 7) < monthIso(new Date()) && (item.refunded_cents || 0) < item.amount_cents &&
+            <Button label="Registrar estorno" secondary disabled={busy} onPress={() => startRefund(item)} />}
+          {refundItem?.id === item.id && <Card>
+            <Text style={label()}>Crédito recebido pelo estorno</Text>
+            <Text style={muted()}>A compra original permanece no histórico. Informe a fatura em que o banco lançou o crédito. Outras parcelas da compra continuam como estão.</Text>
+            <Text style={label()}>Valor estornado (R$)</Text>
+            <MoneyInput accessibilityLabel="Valor do estorno" style={input()} value={refundAmount} onChangeText={setRefundAmount} />
+            <Text style={label()}>Data em que recebeu o crédito</Text>
+            <TextInput accessibilityLabel="Data do crédito do estorno" style={input()} value={refundDate} onChangeText={setRefundDate} placeholder="DD/MM/AAAA" maxLength={10} />
+            <Text style={label()}>Fatura que recebeu o crédito</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>{[new Date(), new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)].map(date =>
+              <Chip key={monthIso(date)} label={monthIso(date).split('-').reverse().join('/')} selected={refundMonth === monthIso(date)} onPress={() => setRefundMonth(monthIso(date))} />)}</View>
+            <TextInput accessibilityLabel="Observação do estorno" placeholder="Observação (opcional)" style={input()} value={refundNote} onChangeText={setRefundNote} maxLength={200} />
+            <Button label={busy ? 'Registrando…' : 'Confirmar crédito de estorno'} disabled={busy} onPress={() => void saveRefund()} />
+            <Button label="Cancelar" secondary disabled={busy} onPress={() => setRefundItem(undefined)} />
+          </Card>}
           {editingPurchase === item.purchase_id && <Card>
             <Text style={label()}>Corrigir parcelas não pagas</Text>
             <Text style={muted()}>Informe quanto será cada parcela e quantas ainda faltam, incluindo a desta fatura. Parcelas anteriores ou já pagas permanecem intactas.</Text>
@@ -328,7 +380,7 @@ export function CardPanel({ workspace, token, refresh, startCreateRequest, onCre
           <Button label="Cancelar" secondary onPress={() => { setAdvanceOpen(false); setError(''); }} />
         </>}
       </Card>}
-      {current.status === 'closed' && <Card>
+      {current.status === 'closed' && current.remaining_cents > 0 && <Card>
         <Text style={label()}>Pagar fatura integral</Text>
         <Text style={muted()}>Todas as parcelas desta fatura serão quitadas juntas.</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{accounts.filter(a => a.kind === 'bank').map(a =>

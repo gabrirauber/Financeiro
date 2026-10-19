@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ScrollView, Text, TextInput } from 'react-native';
+import { PasswordInput } from './PasswordInput';
 import { request } from './api';
 import { Button, Card, palette } from './ui';
 import { useToast } from './Toast';
@@ -30,8 +31,8 @@ export function Recovery({ token, onDone }: { token?: string; onDone: () => void
   return <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:24,gap:16,maxWidth:560,width:'100%',alignSelf:'center'}}>
     <Card><Text style={{fontSize:24,color:palette.ink}}>{token ? 'Definir nova senha' : 'Recuperar acesso'}</Text>
       {!success && (token ? <>
-        <TextInput accessibilityLabel="Nova senha" placeholder="Nova senha (mínimo 10 caracteres)" secureTextEntry style={style} value={password} onChangeText={setPassword} maxLength={128} />
-        <TextInput accessibilityLabel="Confirmar nova senha" placeholder="Confirme a nova senha" secureTextEntry style={style} value={confirmation} onChangeText={setConfirmation} maxLength={128} />
+        <PasswordInput accessibilityLabel="Nova senha" placeholder="Nova senha (mínimo 10 caracteres)" editable={!busy} style={style} value={password} onChangeText={setPassword} maxLength={128} />
+        <PasswordInput accessibilityLabel="Confirmar nova senha" placeholder="Confirme a nova senha" editable={!busy} style={style} value={confirmation} onChangeText={setConfirmation} maxLength={128} />
       </> : <TextInput accessibilityLabel="E-mail de recuperação" placeholder="Seu e-mail" autoCapitalize="none" keyboardType="email-address" style={style} value={email} onChangeText={setEmail} />)}
       {busy ? <Text style={{ color: palette.ink }}>Aguarde…</Text> : <>
         {!success && <Button label={token ? 'Alterar senha' : 'Enviar link de recuperação'} onPress={() => void submit()} />}

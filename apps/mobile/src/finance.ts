@@ -27,7 +27,7 @@ export type CardInstallment = {
   id: string; purchase_id: string; card_id: string; card_name: string;
   invoice_id: string; invoice_month: string; invoice_paid: boolean;
   purchased_on: string; legacy: boolean; sequence: number; total_count: number;
-  created_at: string;
+  created_at: string; refunded_cents?: number;
   amount_cents: number; category_id: string; subcategory_id: string; note: string;
 };
 export type Invoice = {
@@ -35,6 +35,8 @@ export type Invoice = {
   closes_on: string; due_on: string; paid_on: string | null;
   status: 'open' | 'closed' | 'paid' | 'refinanced' | 'settled'; total_cents: number;
   advanced_cents: number; remaining_cents: number;
+  refund_total_cents: number; credit_brought_cents: number; credit_balance_cents: number;
+  refunds: { id: string; source_installment_id: string; amount_cents: number; credited_on: string; note: string }[];
   advances: { id: string; amount_cents: number }[];
   purchase_total_cents: number; financed_total_cents: number;
   installments: CardInstallment[];

@@ -184,7 +184,8 @@ def render_monthly_pdf(data, detail=False):
         story.append(Spacer(1, 5))
         story.append(paragraph(
             "Categorias mostram consumo e fixas pendentes. Parcelas de fatura refinanciada "
-            "são compromissos, não novas compras.", styles["small"]))
+            "são compromissos, não novas compras. Estornos são créditos na fatura de destino; "
+            "o consumo original permanece no histórico.", styles["small"]))
     else:
         empty(story, "Nenhuma compra ou despesa categorizada neste mês.", styles)
 
@@ -218,6 +219,14 @@ def render_monthly_pdf(data, detail=False):
         story.append(rows_table(["Cartão", "Vencimento", "Fatura", "Pendente"], rows,
                                 [width * .31, width * .22, width * .23, width * .24], styles))
         for item in data["invoices"]:
+            if (item.get("refund_cents") or item.get("credit_brought_cents")
+                    or item.get("credit_balance_cents")):
+                story.append(paragraph(
+                    f"{item['name']}: estornos nesta fatura {money(item.get('refund_cents', 0))}; "
+                    f"crédito anterior {money(item.get('credit_brought_cents', 0))}; "
+                    f"crédito para próximas faturas {money(item.get('credit_balance_cents', 0))}. "
+                    "O crédito permanece no cartão e não representa receita na conta.",
+                    styles["small"]))
             if item["advanced_cents"] or item["refinanced_cents"]:
                 story.append(paragraph(
                     f"{item['name']}: antecipado {money(item['advanced_cents'])}; "

@@ -148,3 +148,24 @@ class InvoiceAdvance(Base):
     movement_id: Mapped[UUID] = mapped_column(ForeignKey("movements.id"), unique=True)
     request_id: Mapped[str] = mapped_column(String(80))
     amount_cents: Mapped[int] = mapped_column(Integer)
+
+
+class CardRefund(Base):
+    __tablename__ = "card_refunds"
+    __table_args__ = (
+        CheckConstraint("amount_cents > 0", name="card_refund_positive"),
+        UniqueConstraint("source_installment_id", "request_id", name="uq_card_refund_request"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    source_installment_id: Mapped[UUID] = mapped_column(
+        ForeignKey("card_installments.id", ondelete="CASCADE")
+    )
+    invoice_id: Mapped[UUID] = mapped_column(
+        ForeignKey("invoices.id", ondelete="CASCADE"), index=True
+    )
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    credited_on: Mapped[date] = mapped_column(Date)
+    note: Mapped[str] = mapped_column(String(200), default="")
+    request_id: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
