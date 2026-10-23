@@ -76,7 +76,8 @@ export function AccessGate({ children, theme, onToggleTheme }: { children: (work
     if (!token || !user) return;
     const refresh = () => { void load(token).catch(async e => {
       if (tokenRef.current !== token) return;
-      setSelected(undefined);
+      // Keep the loaded workspace during transient network/server failures.
+      // A successful refresh with no memberships still clears it in load().
       if (e instanceof ApiError && e.status === 401) await resetSession();
       setError(e instanceof Error ? e.message : 'Conexão indisponível.');
     }); };

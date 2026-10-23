@@ -104,12 +104,12 @@ def generate_month(db, workspace_id, month):
             IncomePlan.start_month <= month,
         )
     ).all()
+    existing = set(db.scalars(
+        select(IncomeOccurrence.plan_id).join(IncomePlan, IncomePlan.id == IncomeOccurrence.plan_id)
+        .where(IncomePlan.workspace_id == workspace_id, IncomeOccurrence.month == month)
+    ))
     for plan in plans:
-        if db.scalar(
-            select(IncomeOccurrence.id).where(
-                IncomeOccurrence.plan_id == plan.id, IncomeOccurrence.month == month
-            )
-        ):
+        if plan.id in existing:
             continue
         db.add(
             IncomeOccurrence(

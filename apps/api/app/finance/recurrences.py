@@ -112,12 +112,13 @@ def generate_month(db, workspace_id, month, current):
             RecurringRule.start_month <= month,
         )
     ).all()
+    occurrences = {row.rule_id: row for row in db.scalars(
+        select(RecurringOccurrence)
+        .join(RecurringRule, RecurringRule.id == RecurringOccurrence.rule_id)
+        .where(RecurringRule.workspace_id == workspace_id, RecurringOccurrence.month == month)
+    )}
     for rule in rules:
-        occurrence = db.scalar(
-            select(RecurringOccurrence).where(
-                RecurringOccurrence.rule_id == rule.id, RecurringOccurrence.month == month
-            )
-        )
+        occurrence = occurrences.get(rule.id)
         if occurrence is None:
             occurrence = RecurringOccurrence(
                 rule_id=rule.id,
@@ -131,7 +132,6 @@ def generate_month(db, workspace_id, month, current):
                 card_id=rule.card_id,
             )
             db.add(occurrence)
-            db.flush()
         if rule.kind != "card" or occurrence.due_on > current or occurrence.purchase_id:
             continue
         card = card_or_404(db, workspace_id, occurrence.card_id)
@@ -173,6 +173,7 @@ def generate_month(db, workspace_id, month, current):
             )
         )
         occurrence.purchase_id = purchase.id
+    db.flush()
 
 
 def rule_or_404(db, workspace_id, rule_id):

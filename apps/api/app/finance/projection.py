@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app.finance.card_models import CreditCard, Invoice, InvoiceFinancing
 from app.finance.cards import (
@@ -26,6 +26,7 @@ from app.finance.recurrence_models import (
 from app.finance.recurrences import generate_month as generate_recurring
 from app.finance.routes import account_balances, today
 from app.identity.dependencies import CurrentUser, Db
+from app.identity.models import Workspace
 from app.identity.workspaces import require_member
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["projection"])
@@ -258,10 +259,18 @@ def build_projection(db, workspace_id, workspace, target):
             raise HTTPException(422, "Consulte até cinco anos à frente.")
         step = current_month
         while step <= target:
+            # Only generation writes data. Release its workspace lock before
+            # the calculation, and between months on long-range projections.
+            db.scalar(select(Workspace).where(Workspace.id == workspace_id).with_for_update())
             generate_income(db, workspace_id, step)
             generate_recurring(db, workspace_id, step, current)
+            db.commit()
             step = shift_month(step, 1)
-        db.flush()
+    else:
+        db.commit()
+    # All calculation queries see one coherent snapshot without locking writers.
+    # Generation has been committed above; no financial writes are allowed here.
+    db.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
     values = month_values(db, workspace_id, target, current, historical)
     if historical:
         last_day = shift_month(target, 1) - timedelta(days=1)
